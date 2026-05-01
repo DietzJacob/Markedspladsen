@@ -102,7 +102,23 @@ function renderTopbar(root) {
           style: { "--btn-color": b.color, "--btn-shadow": b.alpha, color: b.color },
           onclick: b.onclick || (() => {}),
         }, b.label)
-      )
+      ),
+      // User badge + logout (only when authed via auth.js)
+      window.__user
+        ? el("div", { class: "user-chip" },
+            el("span", { class: "user-email" }, window.__user.email || "logget ind"),
+            el("button", {
+              class: "action-btn",
+              style: { "--btn-color": "#94a3b8", "--btn-shadow": "rgba(148,163,184,0.4)", color: "#94a3b8" },
+              onclick: async () => {
+                if (window.__signOut) {
+                  try { await window.__signOut(); } catch (_) {}
+                  window.location.replace("./login.html");
+                }
+              },
+            }, "log ud")
+          )
+        : null
     )
   );
   root.appendChild(row1);

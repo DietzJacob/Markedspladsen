@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Log ind — Markedspuls</title>
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230E1428'/><circle cx='16' cy='16' r='6' fill='%23F472B6'/></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="login.css" />
+</head>
+<body>
+  <div class="login-app">
+    <div class="login-card">
+      <h1 class="login-logo">MARKEDS<span class="puls">PULS</span></h1>
+      <p class="login-tagline">pipeline for solo-konsulent</p>
+
+      <form id="form-email" autocomplete="on" novalidate>
+        <div class="login-field">
+          <label class="login-label" for="email">email</label>
+          <input class="login-input" id="email" name="email" type="email" required autocomplete="email" placeholder="navn@firma.dk" />
+        </div>
+        <div class="login-field">
+          <label class="login-label" for="password">adgangskode</label>
+          <input class="login-input" id="password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" minlength="6" />
+        </div>
+        <button class="login-submit" id="btn-submit" type="submit">Log ind</button>
+      </form>
+
+      <div class="login-altrow">
+        <button class="login-link" id="btn-reset" type="button">Glemt adgangskode?</button>
+        <button class="login-link" id="btn-toggle" type="button">Opret konto</button>
+      </div>
+
+      <div class="login-msg" id="msg" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="login-foot">København · 2026</div>
+  </div>
+
+  <script type="module" src="./login.js"></script>
+</body>
+</html>

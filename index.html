@@ -14,14 +14,37 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="styles.css" />
+
+  <style>
+    .auth-pending .app { visibility: hidden; }
+    .auth-splash {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(232,226,214,0.4); z-index: 100;
+    }
+  </style>
 </head>
-<body>
+<body class="auth-pending">
+  <div class="auth-splash" id="auth-splash">tjekker login …</div>
+
   <div class="app">
     <div class="topbar" id="topbar"></div>
     <div class="lanes" id="lanes"></div>
   </div>
 
-  <!-- Step 1: data inlined as plain JS, no Firebase yet -->
+  <script type="module">
+    import { requireAuth, signOutUser } from "./auth.js";
+    const user = await requireAuth("./login.html");
+    window.__user = user;
+    window.__signOut = signOutUser;
+    document.body.classList.remove("auth-pending");
+    const splash = document.getElementById("auth-splash");
+    if (splash) splash.remove();
+    if (window.__onAuthReady) window.__onAuthReady(user);
+  </script>
+
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
