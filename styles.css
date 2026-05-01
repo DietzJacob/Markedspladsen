@@ -1,0 +1,565 @@
+/* ─────────────────────────────────────────────────────────────
+   Markedspuls — pipeline-board (Direction 04b)
+   Pure CSS, no preprocessor. Step 1: static, no Firebase.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Backgrounds (default = midnat) */
+  --bg:        #0E1428;
+  --grid:      rgba(255,255,255,0.025);
+
+  /* Surfaces / text */
+  --card-surface:     rgba(20, 24, 40, 0.55);
+  --card-surface-won: rgba(251, 146, 60, 0.08);
+  --text-primary:     #E8E2D6;
+  --text-secondary:   rgba(232, 226, 214, 0.5);
+  --text-tertiary:    rgba(232, 226, 214, 0.4);
+  --text-quaternary:  rgba(232, 226, 214, 0.45);
+  --text-muted:       rgba(232, 226, 214, 0.55);
+  --text-soft:        rgba(232, 226, 214, 0.65);
+  --text-quiet:       rgba(232, 226, 214, 0.7);
+
+  /* Accents */
+  --accent-magenta: #F472B6;  /* now */
+  --accent-green:   #86EFAC;  /* next */
+  --accent-azure:   #7DD3FC;  /* bubbles */
+  --accent-amber:   #FDBA74;  /* won */
+  --orange-puls:    #FB923C;
+  --cyan-export:    #22D3EE;
+  --purple-import:  #A78BFA;
+}
+
+/* ── Reset / base ─────────────────────────────────────────── */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* App root: full viewport, navy background, 32px grid */
+.app {
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ── Topbar ───────────────────────────────────────────────── */
+.topbar {
+  padding: 16px 22px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 16px;
+}
+
+.logo {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.logo-mark {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+.logo-mark .puls {
+  color: var(--orange-puls);
+  text-shadow: 0 0 12px rgba(251,146,60,0.6), 0 0 24px rgba(251,146,60,0.3);
+}
+
+.logo-meta {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: transparent;
+  padding: 5px 10px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  color: var(--btn-color, var(--orange-puls));
+  text-shadow: 0 0 6px var(--btn-shadow, rgba(251,146,60,0.4));
+  transition: background 0.12s;
+}
+.action-btn:hover { background: rgba(255,255,255,0.04); }
+
+.bg-dropdown {
+  position: absolute;
+  right: 22px;
+  top: 52px;
+  background: rgba(20,24,40,0.95);
+  border: 1px solid rgba(134,239,172,0.4);
+  border-radius: 3px;
+  padding: 8px;
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.bg-swatch {
+  width: 60px;
+  height: 36px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 2px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: rgba(232,226,214,0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.bg-swatch.is-active { border: 2px solid var(--accent-green); }
+
+/* "Lander et sted" strip ─ 4 cells with hairline dividers */
+.strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-top: 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.strip-cell {
+  padding: 8px 12px;
+  background: rgba(20,24,40,0.4);
+}
+.strip-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.5px;
+  color: rgba(232,226,214,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.strip-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 2px;
+  color: var(--strip-color, var(--text-primary));
+  text-shadow: 0 0 8px var(--strip-shadow, transparent);
+}
+.strip-value .unit {
+  font-size: 11px;
+  opacity: 0.6;
+  font-weight: 700;
+}
+.strip-sub {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.5px;
+  color: rgba(232,226,214,0.4);
+  margin-top: 2px;
+}
+
+/* Goal progress bar */
+.goal-bar {
+  margin-top: 6px;
+  height: 4px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.goal-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, #FDBA74, #F472B6);
+  box-shadow: 0 0 8px rgba(251,146,60,0.5);
+}
+.goal-marker {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+}
+
+/* ── Lanes grid ───────────────────────────────────────────── */
+.lanes {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.lane {
+  border-radius: 4px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--lane-bg);
+  border: 1px solid var(--lane-border);
+  box-shadow: inset 0 0 60px -10px var(--lane-glow);
+}
+
+.lane-header { margin-bottom: 12px; }
+
+.lane-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.lane-title {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lane-title);
+  text-shadow: 0 0 10px var(--lane-glow), 0 0 20px var(--lane-glow);
+}
+.lane-count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: rgba(232,226,214,0.5);
+}
+.lane-subtitle {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  color: rgba(232,226,214,0.4);
+  margin-top: 3px;
+  letter-spacing: 0.04em;
+}
+.lane-total {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--lane-border);
+  border-radius: 3px;
+  background: var(--lane-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.lane-total-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.5px;
+  color: rgba(232,226,214,0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.lane-total-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--lane-title);
+  text-shadow: 0 0 8px var(--lane-glow);
+}
+
+/* Lane card list — independent vertical scroll if overflow */
+.lane-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-right: 2px; /* breathing room from scrollbar */
+}
+
+/* Custom scrollbar for the lane lists */
+.lane-cards::-webkit-scrollbar { width: 5px; }
+.lane-cards::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+.lane-cards::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Pipeline card ────────────────────────────────────────── */
+.card {
+  background: var(--card-surface);
+  border: 1px solid var(--lane-border);
+  border-left: 3px solid var(--temp-color);
+  border-radius: 4px;
+  padding: 10px 12px 11px;
+  cursor: pointer;
+  position: relative;
+  color: var(--text-primary);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  animation: cardFadeIn 0.32s ease both;
+}
+.card:hover {
+  transform: translateY(-1px);
+}
+.card.is-overdue {
+  box-shadow:
+    0 0 0 1px var(--temp-color-66),
+    0 0 14px var(--temp-color-33);
+}
+
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+.card-name {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.card-company {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.card-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lane-title);
+  text-align: right;
+}
+.card-value-unit {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: var(--text-quaternary);
+  text-align: right;
+}
+
+/* Probability bar */
+.prob-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.prob-bar {
+  flex: 1;
+  height: 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 2px;
+  position: relative;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.prob-tick {
+  position: absolute;
+  top: 2px; bottom: 2px;
+  width: 1px;
+  background: rgba(255,255,255,0.12);
+}
+.prob-fill {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  background: linear-gradient(90deg, var(--temp-color-88), var(--temp-color));
+  box-shadow: 0 0 8px var(--temp-color-66);
+  border-radius: 2px;
+  transition: width 0.15s;
+  pointer-events: none;
+}
+.prob-fill.is-dragging { transition: none; }
+.prob-handle {
+  position: absolute;
+  top: -3px; bottom: -3px;
+  width: 12px;
+  background: var(--temp-color);
+  border-radius: 2px;
+  box-shadow: 0 0 10px var(--temp-color), 0 0 0 2px rgba(0,0,0,0.4);
+  transition: left 0.15s;
+  pointer-events: none;
+}
+.prob-handle.is-dragging { transition: none; }
+.prob-pct {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--temp-color);
+  min-width: 36px;
+  text-align: right;
+  text-shadow: 0 0 6px var(--temp-color-80);
+}
+
+/* NEXT box */
+.next-box {
+  margin-top: 10px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px dashed rgba(255,255,255,0.12);
+  border-radius: 3px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.next-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.5px;
+  color: var(--lane-title);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 6px var(--lane-glow);
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.next-text {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+/* Card meta row (status + date) */
+.card-meta {
+  margin-top: 7px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  display: flex;
+  justify-content: space-between;
+  color: rgba(232,226,214,0.45);
+}
+.card-meta .status {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.card-meta.is-overdue .status { color: var(--temp-color); }
+.card-meta.is-overdue { color: var(--temp-color); }
+.card-meta.is-soon .status { color: var(--accent-amber); }
+.card-meta.is-soon { color: var(--accent-amber); }
+
+/* Expanded card section */
+.card-expanded {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255,255,255,0.10);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--text-soft);
+}
+.card-expanded .derefter-label {
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--lane-title);
+}
+.card-expanded .derefter-text {
+  margin-top: 2px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.card-expanded .quote {
+  font-family: "JetBrains Mono", monospace;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.card-expanded .log-line {
+  font-size: 9px;
+  color: var(--text-soft);
+}
+
+/* ── Won card ─────────────────────────────────────────────── */
+.won-card {
+  background: var(--card-surface-won);
+  border: 1px solid var(--lane-border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  animation: cardFadeIn 0.32s ease both;
+}
+.won-card .card-value {
+  color: var(--accent-amber);
+  font-weight: 700;
+  text-shadow: 0 0 8px var(--lane-glow);
+}
+.won-card .card-value-unit { color: var(--text-quaternary); }
+
+.won-meta {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: rgba(232,226,214,0.55);
+}
+
+.won-note {
+  margin-top: 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--text-quiet);
+  line-height: 1.3;
+}
+
+/* ── Add-card button at bottom of lane ────────────────────── */
+.add-btn {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  background: transparent;
+  border: 1px dashed var(--lane-border);
+  color: rgba(232,226,214,0.5);
+  padding: 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 0;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.add-btn:hover {
+  background: rgba(255,255,255,0.03);
+  color: var(--text-primary);
+}
+
+/* ── Card stagger (50ms) ──────────────────────────────────── */
+.card:nth-child(1), .won-card:nth-child(1) { animation-delay: 0ms; }
+.card:nth-child(2), .won-card:nth-child(2) { animation-delay: 50ms; }
+.card:nth-child(3), .won-card:nth-child(3) { animation-delay: 100ms; }
+.card:nth-child(4), .won-card:nth-child(4) { animation-delay: 150ms; }
+.card:nth-child(5), .won-card:nth-child(5) { animation-delay: 200ms; }
+.card:nth-child(6), .won-card:nth-child(6) { animation-delay: 250ms; }

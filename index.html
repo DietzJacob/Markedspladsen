@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Markedspuls — pipeline</title>
+
+  <!-- Favicon: 32×32 magenta dot on midnat (placeholder, inlined SVG) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230E1428'/><circle cx='16' cy='16' r='6' fill='%23F472B6'/></svg>" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="topbar" id="topbar"></div>
+    <div class="lanes" id="lanes"></div>
+  </div>
+
+  <!-- Step 1: data inlined as plain JS, no Firebase yet -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
