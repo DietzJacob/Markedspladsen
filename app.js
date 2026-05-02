@@ -1,24 +1,40 @@
-/* ─────────────────────────────────────────────────────────────
-   Markedspuls — vanilla JS render + interactions (step 1)
-   No Firebase yet. All state in-memory; resets on reload.
-   ───────────────────────────────────────────────────────────── */
+import {
+  watchPipeline, watchWon, watchUserDoc,
+  createCard, updateCard, deleteCard,
+  createWon, deleteWon,
+  setPrefs, isUserEmpty, seedDemoData,
+} from "./db.js";
 
-// ── App state ────────────────────────────────────────────────
+const TEMPS    = window.TEMPS;
+const LANES    = window.LANES;
+const LANE_TINTS = window.LANE_TINTS;
+const BG_PRESETS = window.BG_PRESETS;
+const SEED_PIPELINE = window.PIPELINE;
+const SEED_WON      = window.WON_DEALS;
+const SEED_ALL_TIME = window.ALL_TIME;
+const TODAY_ISO = window.TODAY_ISO || "2026-05-01";
+const fmtKr     = window.fmtKr;
+const daysUntil = window.daysUntil;
+
 const state = {
-  openId: "c01",                          // expanded pipeline card
-  bgIdx: 0,                               // BG_PRESETS index
-  probs: PIPELINE.reduce((m, c) => (m[c.id] = c.probability, m), {}),
+  user: window.__user,
+  pipeline: [],
+  won: [],
+  prefs: { bgPreset: "midnat", goalThisYear: 3500000, bookedThisYear: 1860000 },
+  loaded: { pipeline: false, won: false, prefs: false },
+  openId: null,
   bgPickerOpen: false,
+  modal: null,
+  errorBanner: null,
 };
 
-// Helpers ─────────────────────────────────────────────────────
 const $ = (sel, root = document) => root.querySelector(sel);
+
 const el = (tag, attrs = {}, ...children) => {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (k === "class") node.className = v;
     else if (k === "style") {
-      // Support CSS custom properties (--foo) via setProperty
       for (const [sk, sv] of Object.entries(v || {})) {
         if (sk.startsWith("--")) node.style.setProperty(sk, sv);
         else node.style[sk] = sv;
@@ -39,47 +55,75 @@ const el = (tag, attrs = {}, ...children) => {
   return node;
 };
 
-// Convert "#RRGGBB" + 2-hex-digit alpha → "#RRGGBBaa" (CSS hex8)
-const hex8 = (hex, alphaHex) => `${hex}${alphaHex}`;
-
-// Compute ddmm formatted as "DD/MM" from ISO date
 const ddmm = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
 
-// Aggregate totals (live, derived from state.probs)
-function computeTotals() {
-  const weighted = PIPELINE.reduce(
-    (s, c) => s + c.value * (state.probs[c.id] ?? c.probability) / 100,
-    0
-  );
-  return {
-    wonYear: ALL_TIME.wonThisYear,
-    weighted,
-    booked: ALL_TIME.bookedThisYear,
-    goal: ALL_TIME.goalThisYear,
-  };
-}
-function laneWeightedTotal(key) {
-  return laneCards(key).reduce(
-    (s, c) => s + c.value * (state.probs[c.id] ?? c.probability) / 100,
-    0
-  );
-}
-function wonTotal() {
-  return WON_DEALS.reduce((s, d) => s + d.value, 0);
+function laneCards(key) {
+  return state.pipeline.filter(c => c.lane === key);
 }
 
-// ── Apply background preset to <body> + .app ─────────────────
+function laneWeightedTotal(key) {
+  return laneCards(key).reduce((s, c) => s + (c.value * c.probability) / 100, 0);
+}
+
+function totalWeighted() {
+  return state.pipeline.reduce((s, c) => s + (c.value * c.probability) / 100, 0);
+}
+
+function wonTotal() {
+  return state.won.reduce((s, d) => s + d.value, 0);
+}
+
+function thisYearWonTotal() {
+  const year = new Date(TODAY_ISO).getFullYear();
+  return state.won.reduce((s, d) => {
+    const wy = d.wonDate ? new Date(d.wonDate).getFullYear() : null;
+    return wy === year ? s + d.value : s;
+  }, 0);
+}
+
+function bgPreset() {
+  return BG_PRESETS.find(p => p.name === state.prefs.bgPreset) || BG_PRESETS[0];
+}
+
 function applyBg() {
-  const p = BG_PRESETS[state.bgIdx];
+  const p = bgPreset();
   document.documentElement.style.setProperty("--bg", p.bg);
   document.documentElement.style.setProperty("--grid", p.grid);
 }
 
-// ── Topbar render ────────────────────────────────────────────
-function renderTopbar(root) {
+function showToast(msg, kind = "info") {
+  const t = $("#toast");
+  if (!t) return;
+  t.textContent = msg;
+  t.className = `toast is-${kind}`;
+  t.hidden = false;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => { t.hidden = true; }, 3000);
+}
+
+function showErrorBanner(msg) {
+  if (state.errorBanner === msg) return;
+  state.errorBanner = msg;
+  let banner = $("#error-banner");
+  if (!banner) {
+    banner = el("div", { id: "error-banner", class: "error-banner" });
+    document.body.insertBefore(banner, document.body.firstChild);
+  }
+  banner.innerHTML = "";
+  banner.appendChild(el("div", { class: "error-banner-inner" },
+    el("span", null, msg),
+    el("a", {
+      href: "https://console.firebase.google.com/",
+      target: "_blank",
+      rel: "noopener",
+    }, "Åbn Firebase Console")
+  ));
+}
+
+function renderTopbar() {
+  const root = $("#topbar");
   root.innerHTML = "";
 
-  // Row 1 — logo + actions
   const row1 = el("div", { class: "topbar-row" },
     el("div", { class: "logo" },
       el("div", { class: "logo-mark" },
@@ -90,61 +134,66 @@ function renderTopbar(root) {
     ),
     el("div", { class: "actions" },
       ...[
-        { label: "+ ny",        color: "#FB923C", alpha: "rgba(251,146,60,0.4)" },
-        { label: "↓ export",    color: "#22D3EE", alpha: "rgba(34,211,238,0.4)" },
-        { label: "↑ import",    color: "#A78BFA", alpha: "rgba(167,139,250,0.4)" },
+        { label: "+ ny",        color: "#FB923C", alpha: "rgba(251,146,60,0.4)",
+          onclick: (e) => { e.stopPropagation(); openCardModal({ mode: "create", lane: "now" }); } },
+        { label: "↓ export",    color: "#22D3EE", alpha: "rgba(34,211,238,0.4)",
+          onclick: (e) => { e.stopPropagation(); exportJson(); } },
+        { label: "↑ import",    color: "#A78BFA", alpha: "rgba(167,139,250,0.4)",
+          onclick: (e) => { e.stopPropagation(); importJson(); } },
         { label: "⊙ baggrund",  color: "#86EFAC", alpha: "rgba(134,239,172,0.4)",
-          onclick: (e) => { e.stopPropagation(); state.bgPickerOpen = !state.bgPickerOpen; renderTopbar(root); }
-        },
+          onclick: (e) => { e.stopPropagation(); state.bgPickerOpen = !state.bgPickerOpen; renderTopbar(); } },
       ].map(b =>
         el("button", {
           class: "action-btn",
           style: { "--btn-color": b.color, "--btn-shadow": b.alpha, color: b.color },
-          onclick: b.onclick || (() => {}),
+          onclick: b.onclick,
         }, b.label)
       ),
-      // User badge + logout (only when authed via auth.js)
-      window.__user
-        ? el("div", { class: "user-chip" },
-            el("span", { class: "user-email" }, window.__user.email || "logget ind"),
-            el("button", {
-              class: "action-btn",
-              style: { "--btn-color": "#94a3b8", "--btn-shadow": "rgba(148,163,184,0.4)", color: "#94a3b8" },
-              onclick: async () => {
-                if (window.__signOut) {
-                  try { await window.__signOut(); } catch (_) {}
-                  window.location.replace("./login.html");
-                }
-              },
-            }, "log ud")
-          )
-        : null
+      state.user ? el("div", { class: "user-chip" },
+        el("span", { class: "user-email" }, state.user.email || "logget ind"),
+        el("button", {
+          class: "action-btn",
+          style: { "--btn-color": "#94a3b8", "--btn-shadow": "rgba(148,163,184,0.4)", color: "#94a3b8" },
+          onclick: async () => {
+            try { await window.__signOut(); } catch (_) {}
+            window.location.replace("./login.html");
+          },
+        }, "log ud")
+      ) : null
     )
   );
   root.appendChild(row1);
 
-  // Background-picker dropdown (only when open)
   if (state.bgPickerOpen) {
     const dropdown = el("div", { class: "bg-dropdown", onclick: (e) => e.stopPropagation() },
-      ...BG_PRESETS.map((p, i) =>
+      ...BG_PRESETS.map(p =>
         el("button", {
-          class: "bg-swatch" + (i === state.bgIdx ? " is-active" : ""),
+          class: "bg-swatch" + (state.prefs.bgPreset === p.name ? " is-active" : ""),
           style: { background: p.bg },
-          onclick: () => { state.bgIdx = i; applyBg(); state.bgPickerOpen = false; renderTopbar(root); },
+          onclick: async () => {
+            state.prefs.bgPreset = p.name;
+            applyBg();
+            state.bgPickerOpen = false;
+            renderTopbar();
+            try { await setPrefs(state.user.uid, { bgPreset: p.name }); }
+            catch (e) { showToast("Kunne ikke gemme baggrund: " + e.code, "error"); }
+          },
         }, p.name)
       )
     );
     root.appendChild(dropdown);
   }
 
-  // Row 2 — calculation strip
-  const totals = computeTotals();
-  const pct = Math.round((totals.wonYear / totals.goal) * 100);
+  const wonYear = thisYearWonTotal();
+  const goal = state.prefs.goalThisYear || 3500000;
+  const booked = state.prefs.bookedThisYear || 0;
+  const weighted = totalWeighted();
+  const pct = goal > 0 ? Math.round((wonYear / goal) * 100) : 0;
   const stripCells = [
-    { label: "vundet i år",    value: fmtKr(totals.wonYear),    color: "#FDBA74", sub: "" },
-    { label: "vægtet pipeline", value: fmtKr(totals.weighted),  color: "#F472B6", sub: "forventet" },
-    { label: "booket",         value: fmtKr(totals.booked),     color: "#86EFAC", sub: "i år" },
-    { label: "mål 2026",       value: fmtKr(totals.goal),       color: "#7DD3FC", sub: `${pct}% nået` },
+    { label: "vundet i år",     value: fmtKr(wonYear),  color: "#FDBA74", sub: "" },
+    { label: "vægtet pipeline", value: fmtKr(weighted), color: "#F472B6", sub: "forventet" },
+    { label: "booket",          value: fmtKr(booked),   color: "#86EFAC", sub: "i år" },
+    { label: "mål 2026",        value: fmtKr(goal),     color: "#7DD3FC", sub: `${pct}% nået` },
   ];
   const strip = el("div", { class: "strip" },
     ...stripCells.map(c =>
@@ -163,45 +212,34 @@ function renderTopbar(root) {
   );
   root.appendChild(strip);
 
-  // Goal progress bar
-  const fillPct = Math.min(100, (totals.wonYear / totals.goal) * 100);
-  const markerPct = Math.min(100, ((totals.wonYear + totals.weighted) / totals.goal) * 100);
-  const goal = el("div", { class: "goal-bar" },
+  const fillPct = goal > 0 ? Math.min(100, (wonYear / goal) * 100) : 0;
+  const markerPct = goal > 0 ? Math.min(100, ((wonYear + weighted) / goal) * 100) : 0;
+  const goalBar = el("div", { class: "goal-bar" },
     el("div", { class: "goal-fill", style: { width: `${fillPct}%` } }),
     el("div", { class: "goal-marker", title: "vundet + vægtet", style: { left: `${markerPct}%` } })
   );
-  root.appendChild(goal);
+  root.appendChild(goalBar);
 }
 
-// ── Pipeline card render ─────────────────────────────────────
 function renderCard(card) {
-  const t = TEMPS[card.temp];
-  const tint = LANE_TINTS[card.lane];
+  const t = TEMPS[card.temp] || TEMPS.unknown;
+  const tint = LANE_TINTS[card.lane] || LANE_TINTS.bubbles;
   const days = daysUntil(card.deadline);
   const overdue = days < 0;
   const soon = days >= 0 && days <= 2;
-  const prob = state.probs[card.id] ?? card.probability;
   const expanded = state.openId === card.id;
 
-  // CSS variables scoped to this card
   const tempStyle = {
     "--temp-color":    t.color,
-    "--temp-color-88": `${t.color}DD`, // gradient start (slightly less opaque)
-    "--temp-color-66": `${t.color}AA`,
-    "--temp-color-33": `${t.color}55`,
-    "--temp-color-80": `${t.color}CC`,
+    "--temp-color-88": `${t.color}88`,
+    "--temp-color-66": `${t.color}66`,
+    "--temp-color-33": `${t.color}33`,
+    "--temp-color-80": `${t.color}80`,
     "--lane-bg":     tint.bg,
     "--lane-border": tint.border,
     "--lane-title":  tint.title,
     "--lane-glow":   tint.glow,
   };
-
-  // Ah — README says fill gradient is linear-gradient(90deg, <temp.color>88, <temp.color>).
-  // The "88" suffix in the JSX is a hex alpha = 0x88. I use that directly here.
-  tempStyle["--temp-color-88"] = `${t.color}88`;
-  tempStyle["--temp-color-66"] = `${t.color}66`;
-  tempStyle["--temp-color-33"] = `${t.color}33`;
-  tempStyle["--temp-color-80"] = `${t.color}80`;
 
   const cardEl = el("div", {
     class: "card" + (overdue ? " is-overdue" : ""),
@@ -212,7 +250,6 @@ function renderCard(card) {
     },
   });
 
-  // Head row
   cardEl.appendChild(el("div", { class: "card-head" },
     el("div", { style: { minWidth: "0", flex: "1" } },
       el("div", { class: "card-name" }, card.name),
@@ -224,41 +261,44 @@ function renderCard(card) {
     )
   ));
 
-  // Probability bar
   const bar = el("div", { class: "prob-bar" });
   for (const tick of [25, 50, 75]) {
     bar.appendChild(el("div", { class: "prob-tick", style: { left: `${tick}%` } }));
   }
-  const fill = el("div", { class: "prob-fill", style: { width: `${prob}%` } });
-  const handle = el("div", { class: "prob-handle", style: { left: `calc(${prob}% - 6px)` } });
+  const fill = el("div", { class: "prob-fill", style: { width: `${card.probability}%` } });
+  const handle = el("div", { class: "prob-handle", style: { left: `calc(${card.probability}% - 6px)` } });
   bar.appendChild(fill);
   bar.appendChild(handle);
-
-  const pct = el("span", { class: "prob-pct" }, `${prob}%`);
-
+  const pct = el("span", { class: "prob-pct" }, `${card.probability}%`);
   const probRow = el("div", { class: "prob-row" }, bar, pct);
-  // Stop click bubbling so dragging the bar doesn't toggle expand
   probRow.addEventListener("click", (e) => e.stopPropagation());
 
-  // Drag interaction
+  let lastWritten = card.probability;
+  const writeDebounced = debounce((v) => {
+    if (v === lastWritten) return;
+    lastWritten = v;
+    updateCard(state.user.uid, card.id, { probability: v }).catch(err =>
+      showToast("Kunne ikke gemme: " + (err.code || err.message), "error")
+    );
+  }, 300);
+
   const setFromEvent = (e) => {
     const r = bar.getBoundingClientRect();
     const raw = ((e.clientX - r.left) / r.width) * 100;
-    const clamped = Math.max(0, Math.min(100, raw));
-    const snapped = Math.round(clamped / 5) * 5;
-    state.probs[card.id] = snapped;
-    fill.style.width = `${snapped}%`;
-    handle.style.left = `calc(${snapped}% - 6px)`;
-    pct.textContent = `${snapped}%`;
-    // Live-update topbar
-    renderTopbar($("#topbar"));
-    // Live-update lane total
+    const v = Math.round(Math.max(0, Math.min(100, raw)) / 5) * 5;
+    card.probability = v;
+    fill.style.width = `${v}%`;
+    handle.style.left = `calc(${v}% - 6px)`;
+    pct.textContent = `${v}%`;
+    pct.style.color = t.color;
+    renderTopbar();
     refreshLaneTotal(card.lane);
+    writeDebounced(v);
   };
   bar.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
     e.preventDefault();
-    bar.setPointerCapture?.(e.pointerId);
+    try { bar.setPointerCapture(e.pointerId); } catch (_) {}
     fill.classList.add("is-dragging");
     handle.classList.add("is-dragging");
     setFromEvent(e);
@@ -275,32 +315,48 @@ function renderCard(card) {
 
   cardEl.appendChild(probRow);
 
-  // NEXT box
   cardEl.appendChild(el("div", { class: "next-box" },
     el("span", { class: "next-label" }, "NEXT"),
-    el("span", { class: "next-text" }, card.nextStep)
+    el("span", { class: "next-text" }, card.nextStep || "—")
   ));
 
-  // Bottom meta row (status + deadline)
-  let statusText, metaClass = "card-meta";
+  let statusText = t.label.toLowerCase();
+  let metaClass = "card-meta";
   if (overdue) { statusText = "↯ overskredet"; metaClass += " is-overdue"; }
   else if (soon) { statusText = "▲ snart"; metaClass += " is-soon"; }
-  else { statusText = t.label.toLowerCase(); }
-
   cardEl.appendChild(el("div", { class: metaClass },
     el("span", { class: "status" }, statusText),
     el("span", null, ddmm(card.deadline))
   ));
 
-  // Expanded section
   if (expanded) {
+    const log = Array.isArray(card.log) ? card.log : [];
     const expansion = el("div", { class: "card-expanded" },
       el("div", { style: { marginBottom: "6px" } },
         el("div", { class: "derefter-label" }, "derefter"),
-        el("div", { class: "derefter-text" }, card.afterNext)
+        el("div", { class: "derefter-text" }, card.afterNext || "—")
       ),
-      el("div", { class: "quote" }, `"${card.note}"`),
-      ...card.log.slice(0, 2).map(l => el("div", { class: "log-line" }, `· ${l}`))
+      card.note ? el("div", { class: "quote" }, `"${card.note}"`) : null,
+      ...log.slice(0, 2).map(l => el("div", { class: "log-line" }, `· ${l}`)),
+      el("div", { class: "card-actions" },
+        el("button", {
+          class: "card-action-btn",
+          onclick: (e) => { e.stopPropagation(); openCardModal({ mode: "edit", card }); },
+        }, "rediger"),
+        el("button", {
+          class: "card-action-btn is-danger",
+          onclick: async (e) => {
+            e.stopPropagation();
+            if (!confirm(`Slet "${card.name}"?`)) return;
+            try {
+              await deleteCard(state.user.uid, card.id);
+              showToast("Slettet", "info");
+            } catch (err) {
+              showToast("Kunne ikke slette: " + (err.code || err.message), "error");
+            }
+          },
+        }, "slet")
+      )
     );
     cardEl.appendChild(expansion);
   }
@@ -308,7 +364,6 @@ function renderCard(card) {
   return cardEl;
 }
 
-// ── Won card render ─────────────────────────────────────────
 function renderWonCard(card) {
   const tint = LANE_TINTS.won;
   const node = el("div", {
@@ -318,6 +373,10 @@ function renderWonCard(card) {
       "--lane-border": tint.border,
       "--lane-title": tint.title,
       "--lane-glow": tint.glow,
+    },
+    onclick: () => {
+      state.openId = state.openId === card.id ? null : card.id;
+      renderBoard();
     },
   });
 
@@ -337,16 +396,33 @@ function renderWonCard(card) {
     el("span", null, `leverer ${ddmm(card.deliverBy)}`)
   ));
 
-  node.appendChild(el("div", { class: "won-note" }, card.note));
+  if (card.note) node.appendChild(el("div", { class: "won-note" }, card.note));
+
+  if (state.openId === card.id) {
+    node.appendChild(el("div", { class: "card-actions" },
+      el("button", {
+        class: "card-action-btn is-danger",
+        onclick: async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Slet vundet deal "${card.name}"?`)) return;
+          try {
+            await deleteWon(state.user.uid, card.id);
+            showToast("Slettet", "info");
+          } catch (err) {
+            showToast("Kunne ikke slette: " + (err.code || err.message), "error");
+          }
+        },
+      }, "slet")
+    ));
+  }
 
   return node;
 }
 
-// ── Lane render ─────────────────────────────────────────────
 function renderLane(lane) {
   const tint = LANE_TINTS[lane.key];
   const isWon = lane.key === "won";
-  const cards = isWon ? WON_DEALS : laneCards(lane.key);
+  const cards = isWon ? state.won : laneCards(lane.key);
   const total = isWon ? wonTotal() : laneWeightedTotal(lane.key);
 
   const laneEl = el("div", {
@@ -360,8 +436,7 @@ function renderLane(lane) {
     },
   });
 
-  // Header
-  const header = el("div", { class: "lane-header" },
+  laneEl.appendChild(el("div", { class: "lane-header" },
     el("div", { class: "lane-title-row" },
       el("div", { class: "lane-title" }, lane.title),
       el("div", { class: "lane-count" }, `${cards.length} ${isWon ? "deals" : "kort"}`)
@@ -371,22 +446,23 @@ function renderLane(lane) {
       el("span", { class: "lane-total-label" }, isWon ? "vundet" : "vægtet"),
       el("span", { class: "lane-total-value" }, `${fmtKr(total)} kr`)
     )
-  );
-  laneEl.appendChild(header);
+  ));
 
-  // Cards list
   const list = el("div", { class: "lane-cards" });
-  for (const c of cards) {
-    list.appendChild(isWon ? renderWonCard(c) : renderCard(c));
-  }
-  // Add-card button at the bottom of the list
-  list.appendChild(el("button", { class: "add-btn" }, isWon ? "+ deal" : "+ kort"));
+  for (const c of cards) list.appendChild(isWon ? renderWonCard(c) : renderCard(c));
+  list.appendChild(el("button", {
+    class: "add-btn",
+    onclick: (e) => {
+      e.stopPropagation();
+      if (isWon) openWonModal({ mode: "create" });
+      else openCardModal({ mode: "create", lane: lane.key });
+    },
+  }, isWon ? "+ deal" : "+ kort"));
   laneEl.appendChild(list);
 
   return laneEl;
 }
 
-// Refresh just the lane total label (after prob drag)
 function refreshLaneTotal(laneKey) {
   const laneEl = document.querySelector(`.lane[data-lane="${laneKey}"]`);
   if (!laneEl) return;
@@ -396,26 +472,370 @@ function refreshLaneTotal(laneKey) {
   totalEl.textContent = `${fmtKr(t)} kr`;
 }
 
-// ── Board render ────────────────────────────────────────────
 function renderBoard() {
-  const lanesRoot = $("#lanes");
-  lanesRoot.innerHTML = "";
-  for (const lane of LANES) lanesRoot.appendChild(renderLane(lane));
+  const root = $("#lanes");
+  root.innerHTML = "";
+  for (const lane of LANES) root.appendChild(renderLane(lane));
 }
 
-// ── Init ────────────────────────────────────────────────────
-function init() {
-  applyBg();
-  renderTopbar($("#topbar"));
-  renderBoard();
+function debounce(fn, ms) {
+  let h;
+  return (...args) => {
+    clearTimeout(h);
+    h = setTimeout(() => fn(...args), ms);
+  };
+}
 
-  // Click outside dropdown closes it
-  document.addEventListener("click", () => {
-    if (state.bgPickerOpen) {
-      state.bgPickerOpen = false;
-      renderTopbar($("#topbar"));
+function openCardModal({ mode, card, lane }) {
+  const isEdit = mode === "edit";
+  const data = isEdit ? card : {
+    lane: lane || "now",
+    name: "",
+    company: "",
+    temp: "warm",
+    probability: 50,
+    value: 100000,
+    booked: 0,
+    deadline: TODAY_ISO,
+    lastContact: TODAY_ISO,
+    nextStep: "",
+    afterNext: "",
+    note: "",
+    log: [],
+  };
+
+  const root = $("#modal");
+  root.innerHTML = "";
+
+  const form = el("form", {
+    class: "modal-form",
+    onsubmit: async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const payload = {
+        lane: fd.get("lane"),
+        name: fd.get("name").trim(),
+        company: fd.get("company").trim(),
+        temp: fd.get("temp"),
+        probability: Math.round(Math.min(100, Math.max(0, +fd.get("probability") || 0)) / 5) * 5,
+        value: Math.max(0, +fd.get("value") || 0),
+        booked: Math.max(0, +fd.get("booked") || 0),
+        deadline: fd.get("deadline"),
+        lastContact: fd.get("lastContact") || TODAY_ISO,
+        nextStep: fd.get("nextStep").trim(),
+        afterNext: fd.get("afterNext").trim(),
+        note: fd.get("note").trim(),
+      };
+      if (!payload.name || !payload.company) {
+        showToast("Navn og firma skal udfyldes", "error");
+        return;
+      }
+      const submitBtn = form.querySelector(".modal-submit");
+      submitBtn.disabled = true;
+      try {
+        if (isEdit) {
+          await updateCard(state.user.uid, card.id, payload);
+          showToast("Gemt", "info");
+        } else {
+          payload.log = [];
+          const newId = await createCard(state.user.uid, payload);
+          state.openId = newId;
+          showToast("Oprettet", "info");
+        }
+        closeModal();
+      } catch (err) {
+        showToast("Kunne ikke gemme: " + (err.code || err.message), "error");
+        submitBtn.disabled = false;
+      }
+    },
+  });
+
+  form.appendChild(el("div", { class: "modal-title" }, isEdit ? "Rediger kort" : "Nyt kort"));
+
+  const tempOpts = [
+    ["glow", "Glødende"],
+    ["warm", "Varm"],
+    ["interest", "Interesseret"],
+    ["cool", "Kølig"],
+    ["unknown", "Ukendt"],
+  ];
+  const laneOpts = [
+    ["now", "Denne uge"],
+    ["next", "Næste uge"],
+    ["bubbles", "Bobler derude"],
+  ];
+
+  const fields = [
+    field("name",        "navn",          el("input", { class: "modal-input", name: "name", value: data.name, required: true, autocomplete: "off" })),
+    field("company",     "firma",         el("input", { class: "modal-input", name: "company", value: data.company, required: true, autocomplete: "off" })),
+    field("lane",        "lane",          select("lane", laneOpts, data.lane)),
+    field("temp",        "temperatur",    select("temp", tempOpts, data.temp)),
+    field("probability", "sandsynlighed (%)", el("input", { class: "modal-input", name: "probability", type: "number", min: 0, max: 100, step: 5, value: data.probability })),
+    field("value",       "værdi (kr)",    el("input", { class: "modal-input", name: "value", type: "number", min: 0, step: 1000, value: data.value })),
+    field("booked",      "booket (kr)",   el("input", { class: "modal-input", name: "booked", type: "number", min: 0, step: 1000, value: data.booked || 0 })),
+    field("deadline",    "deadline",      el("input", { class: "modal-input", name: "deadline", type: "date", value: data.deadline, required: true })),
+    field("lastContact", "sidste kontakt", el("input", { class: "modal-input", name: "lastContact", type: "date", value: data.lastContact || TODAY_ISO })),
+    field("nextStep",    "NEXT",          el("input", { class: "modal-input", name: "nextStep", value: data.nextStep, autocomplete: "off" })),
+    field("afterNext",   "derefter",      el("input", { class: "modal-input", name: "afterNext", value: data.afterNext, autocomplete: "off" })),
+    field("note",        "note",          el("textarea", { class: "modal-input modal-textarea", name: "note", rows: 3 }, data.note || "")),
+  ];
+  const grid = el("div", { class: "modal-grid" }, ...fields);
+  form.appendChild(grid);
+
+  const actions = el("div", { class: "modal-actions" },
+    el("button", { type: "button", class: "modal-cancel", onclick: closeModal }, "Annullér"),
+    el("button", { type: "submit", class: "modal-submit" }, isEdit ? "Gem" : "Opret")
+  );
+  form.appendChild(actions);
+
+  root.appendChild(form);
+  showModal();
+}
+
+function openWonModal({ mode, card }) {
+  const isEdit = mode === "edit";
+  const data = isEdit ? card : {
+    name: "", company: "", value: 0,
+    wonDate: TODAY_ISO, deliverBy: TODAY_ISO, note: "",
+  };
+  const root = $("#modal");
+  root.innerHTML = "";
+
+  const form = el("form", {
+    class: "modal-form",
+    onsubmit: async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const payload = {
+        name: fd.get("name").trim(),
+        company: fd.get("company").trim(),
+        value: Math.max(0, +fd.get("value") || 0),
+        wonDate: fd.get("wonDate"),
+        deliverBy: fd.get("deliverBy"),
+        note: fd.get("note").trim(),
+      };
+      if (!payload.name || !payload.company) {
+        showToast("Navn og firma skal udfyldes", "error");
+        return;
+      }
+      const submitBtn = form.querySelector(".modal-submit");
+      submitBtn.disabled = true;
+      try {
+        await createWon(state.user.uid, payload);
+        showToast("Oprettet", "info");
+        closeModal();
+      } catch (err) {
+        showToast("Kunne ikke gemme: " + (err.code || err.message), "error");
+        submitBtn.disabled = false;
+      }
+    },
+  });
+
+  form.appendChild(el("div", { class: "modal-title" }, isEdit ? "Rediger deal" : "Ny vundet deal"));
+
+  const fields = [
+    field("name",      "navn",       el("input", { class: "modal-input", name: "name", value: data.name, required: true, autocomplete: "off" })),
+    field("company",   "firma",      el("input", { class: "modal-input", name: "company", value: data.company, required: true, autocomplete: "off" })),
+    field("value",     "værdi (kr)", el("input", { class: "modal-input", name: "value", type: "number", min: 0, step: 1000, value: data.value, required: true })),
+    field("wonDate",   "vundet dato", el("input", { class: "modal-input", name: "wonDate", type: "date", value: data.wonDate, required: true })),
+    field("deliverBy", "leverer",    el("input", { class: "modal-input", name: "deliverBy", type: "date", value: data.deliverBy, required: true })),
+    field("note",      "note",       el("textarea", { class: "modal-input modal-textarea", name: "note", rows: 3 }, data.note || "")),
+  ];
+  form.appendChild(el("div", { class: "modal-grid" }, ...fields));
+
+  form.appendChild(el("div", { class: "modal-actions" },
+    el("button", { type: "button", class: "modal-cancel", onclick: closeModal }, "Annullér"),
+    el("button", { type: "submit", class: "modal-submit" }, "Opret")
+  ));
+
+  root.appendChild(form);
+  showModal();
+}
+
+function field(id, label, input) {
+  if (input.tagName === "INPUT" || input.tagName === "TEXTAREA" || input.tagName === "SELECT") {
+    input.id = "f-" + id;
+  }
+  return el("div", { class: "modal-field" + (input.tagName === "TEXTAREA" ? " is-wide" : "") },
+    el("label", { class: "modal-label", for: "f-" + id }, label),
+    input
+  );
+}
+
+function select(name, options, value) {
+  const sel = el("select", { class: "modal-input", name });
+  for (const [v, label] of options) {
+    sel.appendChild(el("option", { value: v, selected: v === value ? "" : false }, label));
+  }
+  return sel;
+}
+
+function showModal() {
+  const bd = $("#modal-backdrop");
+  bd.hidden = false;
+  document.body.classList.add("modal-open");
+  setTimeout(() => {
+    const first = bd.querySelector("input, select, textarea");
+    if (first) first.focus();
+  }, 0);
+}
+
+function closeModal() {
+  const bd = $("#modal-backdrop");
+  bd.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#modal-backdrop").hidden) closeModal();
+});
+$("#modal-backdrop").addEventListener("click", (e) => {
+  if (e.target.id === "modal-backdrop") closeModal();
+});
+
+document.addEventListener("click", () => {
+  if (state.bgPickerOpen) {
+    state.bgPickerOpen = false;
+    renderTopbar();
+  }
+});
+
+function exportJson() {
+  const dump = {
+    schema: "markedspuls.v1",
+    exportedAt: new Date().toISOString(),
+    user: state.user.email,
+    prefs: state.prefs,
+    pipeline: state.pipeline,
+    won: state.won,
+  };
+  const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: `markedspuls-${new Date().toISOString().slice(0, 10)}.json` });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast("Eksporteret", "info");
+}
+
+function importJson() {
+  const input = el("input", { type: "file", accept: ".json,application/json" });
+  input.addEventListener("change", async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data || !Array.isArray(data.pipeline) || !Array.isArray(data.won)) {
+        showToast("Filen ser ikke ud som en Markedspuls-eksport", "error");
+        return;
+      }
+      const ok = confirm(`Importér ${data.pipeline.length} pipeline-kort + ${data.won.length} vundne deals? (eksisterende kort bevares)`);
+      if (!ok) return;
+      const tasks = [];
+      for (const c of data.pipeline) {
+        const { id, createdAt, updatedAt, ...rest } = c;
+        tasks.push(createCard(state.user.uid, rest));
+      }
+      for (const d of data.won) {
+        const { id, createdAt, ...rest } = d;
+        tasks.push(createWon(state.user.uid, rest));
+      }
+      await Promise.all(tasks);
+      showToast("Importeret", "info");
+    } catch (err) {
+      showToast("Importfejl: " + (err.code || err.message), "error");
     }
   });
+  input.click();
 }
 
-document.addEventListener("DOMContentLoaded", init);
+function describeFirestoreError(err) {
+  const code = err && err.code ? err.code : "";
+  if (code === "permission-denied" || code === "Missing or insufficient permissions.") {
+    return "Firestore afviser læseadgang. Tjek at sikkerhedsreglerne er publiceret (Firebase Console → Firestore → Rules).";
+  }
+  if (code === "unavailable" || /not.*enabled|API has not been used/i.test(err.message || "")) {
+    return "Firestore er ikke slået til endnu. Gå til Firebase Console → Firestore Database → Create database.";
+  }
+  return "Firestore fejl: " + (err.code || err.message || "ukendt");
+}
+
+async function init() {
+  applyBg();
+  renderTopbar();
+  renderBoard();
+
+  const uid = state.user.uid;
+
+  let firstSnapshotDone = false;
+  let seedAttempted = false;
+  const tryAutoSeed = async () => {
+    if (seedAttempted) return;
+    seedAttempted = true;
+    if (!state.loaded.pipeline || !state.loaded.won) return;
+    if (state.pipeline.length > 0 || state.won.length > 0) return;
+    try {
+      await seedDemoData(uid, SEED_PIPELINE, SEED_WON, {
+        bgPreset: "midnat",
+        goalThisYear: SEED_ALL_TIME.goalThisYear,
+        bookedThisYear: SEED_ALL_TIME.bookedThisYear,
+      });
+      showToast("Demo-data oprettet — du kan slette dem og oprette dine egne", "info");
+    } catch (err) {
+      showToast(describeFirestoreError(err), "error");
+    }
+  };
+
+  watchPipeline(uid,
+    (cards) => {
+      cards.sort((a, b) => (a.deadline || "").localeCompare(b.deadline || ""));
+      state.pipeline = cards;
+      state.loaded.pipeline = true;
+      renderTopbar();
+      renderBoard();
+      if (!firstSnapshotDone && state.loaded.pipeline && state.loaded.won) {
+        firstSnapshotDone = true;
+        tryAutoSeed();
+      }
+    },
+    (err) => showErrorBanner(describeFirestoreError(err))
+  );
+
+  watchWon(uid,
+    (cards) => {
+      cards.sort((a, b) => (b.wonDate || "").localeCompare(a.wonDate || ""));
+      state.won = cards;
+      state.loaded.won = true;
+      renderTopbar();
+      renderBoard();
+      if (!firstSnapshotDone && state.loaded.pipeline && state.loaded.won) {
+        firstSnapshotDone = true;
+        tryAutoSeed();
+      }
+    },
+    (err) => showErrorBanner(describeFirestoreError(err))
+  );
+
+  watchUserDoc(uid,
+    (data) => {
+      const prefs = (data && data.prefs) || {};
+      state.prefs = {
+        bgPreset: prefs.bgPreset || "midnat",
+        goalThisYear: prefs.goalThisYear || 3500000,
+        bookedThisYear: prefs.bookedThisYear || 1860000,
+      };
+      state.loaded.prefs = true;
+      applyBg();
+      renderTopbar();
+    },
+    (err) => showErrorBanner(describeFirestoreError(err))
+  );
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}

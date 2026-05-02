@@ -583,3 +583,251 @@ button {
 .card:nth-child(4), .won-card:nth-child(4) { animation-delay: 150ms; }
 .card:nth-child(5), .won-card:nth-child(5) { animation-delay: 200ms; }
 .card:nth-child(6), .won-card:nth-child(6) { animation-delay: 250ms; }
+
+/* ── Card action buttons (rediger / slet, in expanded section) ── */
+.card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255,255,255,0.08);
+}
+.card-action-btn {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(232,226,214,0.65);
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.card-action-btn:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.25);
+  color: var(--text-primary);
+}
+.card-action-btn.is-danger {
+  border-color: rgba(216,90,63,0.4);
+  color: #F0997B;
+}
+.card-action-btn.is-danger:hover {
+  background: rgba(216,90,63,0.10);
+  border-color: rgba(216,90,63,0.7);
+  color: #FAC0AE;
+}
+
+/* ── Modal ────────────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8,10,18,0.72);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 24px;
+  overflow-y: auto;
+}
+.modal-backdrop[hidden] { display: none; }
+
+.modal {
+  width: 100%;
+  max-width: 540px;
+  background: rgba(20, 24, 40, 0.96);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 6px;
+  padding: 20px 22px 18px;
+  color: var(--text-primary);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.55);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.modal-field.is-wide { grid-column: 1 / -1; }
+
+.modal-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.modal-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+  box-sizing: border-box;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.modal-input:focus {
+  outline: none;
+  border-color: rgba(134,239,172,0.55);
+  box-shadow: 0 0 0 1px rgba(134,239,172,0.30);
+}
+.modal-textarea {
+  resize: vertical;
+  min-height: 64px;
+  font-family: Inter, -apple-system, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+select.modal-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, rgba(232,226,214,0.5) 50%),
+                    linear-gradient(135deg, rgba(232,226,214,0.5) 50%, transparent 50%);
+  background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+select.modal-input option {
+  background: #1a1f30;
+  color: var(--text-primary);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.modal-cancel,
+.modal-submit {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 3px;
+  cursor: pointer;
+  background: transparent;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.modal-cancel {
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(232,226,214,0.6);
+}
+.modal-cancel:hover {
+  border-color: rgba(255,255,255,0.30);
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.03);
+}
+.modal-submit {
+  border: 1px solid var(--accent-green);
+  color: var(--accent-green);
+  text-shadow: 0 0 6px rgba(134,239,172,0.4);
+}
+.modal-submit:hover { background: rgba(134,239,172,0.10); }
+.modal-submit[disabled] { opacity: 0.5; cursor: wait; }
+
+body.modal-open { overflow: hidden; }
+
+/* ── Toast ───────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  padding: 10px 18px;
+  background: rgba(20, 24, 40, 0.96);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  max-width: 90vw;
+  animation: toastIn 0.18s ease;
+}
+.toast[hidden] { display: none; }
+.toast.is-error {
+  border-color: rgba(216,90,63,0.55);
+  color: #F0997B;
+  text-shadow: 0 0 6px rgba(216,90,63,0.3);
+}
+.toast.is-info {
+  border-color: rgba(134,239,172,0.45);
+  color: var(--accent-green);
+  text-shadow: 0 0 6px rgba(134,239,172,0.3);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ── Error banner (Firestore not configured, etc.) ─────────── */
+.error-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 250;
+  background: rgba(60, 22, 14, 0.96);
+  border-bottom: 1px solid rgba(216,90,63,0.5);
+  padding: 10px 18px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: #F0997B;
+}
+.error-banner-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.error-banner a {
+  color: var(--accent-green);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.error-banner a:hover { color: var(--text-primary); }
+
+/* ── Mobile-friendly tweaks for modal ──────────────────────── */
+@media (max-width: 600px) {
+  .modal-grid { grid-template-columns: 1fr; }
+  .modal { padding: 16px 16px 14px; }
+}

@@ -34,6 +34,12 @@
     <div class="lanes" id="lanes"></div>
   </div>
 
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
   <script type="module">
     import { requireAuth, signOutUser } from "./auth.js";
     const user = await requireAuth("./login.html");
@@ -42,10 +48,9 @@
     document.body.classList.remove("auth-pending");
     const splash = document.getElementById("auth-splash");
     if (splash) splash.remove();
-    if (window.__onAuthReady) window.__onAuthReady(user);
   </script>
 
   <script src="data.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
