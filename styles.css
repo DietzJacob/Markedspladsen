@@ -829,8 +829,144 @@ body.modal-open { overflow: hidden; }
 }
 .error-banner a:hover { color: var(--text-primary); }
 
-/* ── Mobile-friendly tweaks for modal ──────────────────────── */
-@media (max-width: 600px) {
+/* ── Lane dots (visible on mobile only) ────────────────────── */
+.lane-dots {
+  display: none;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0 4px;
+  flex-shrink: 0;
+}
+.lane-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  cursor: pointer;
+  transition: width 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  flex-shrink: 0;
+}
+.lane-dot:hover { background: rgba(255,255,255,0.35); }
+.lane-dot.is-active {
+  width: 24px;
+  border-radius: 3px;
+  background: var(--dot-color, var(--text-primary));
+  box-shadow: 0 0 8px var(--dot-glow, transparent);
+}
+
+/* ── Responsive: tablet & narrow desktop (≤ 1024px) ──────── */
+@media (max-width: 1024px) {
+  .lanes { gap: 8px; padding: 12px 14px 14px; }
+  .topbar { padding: 14px 18px 10px; }
+  .strip-value { font-size: 16px; }
+}
+
+/* ── Responsive: mobile / squeezed desktop (≤ 768px) ─────── */
+@media (max-width: 768px) {
+  html, body { overflow: auto; height: auto; }
+  .app { width: 100%; height: auto; min-height: 100vh; overflow: visible; }
+
+  /* Topbar: stack rows so all 4 buttons + user fit */
+  .topbar { padding: 12px 14px 10px; }
+  .topbar-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .logo {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: baseline;
+  }
+  .logo-mark { font-size: 22px; }
+  .logo-meta { font-size: 8.5px; }
+  .actions {
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 100%;
+  }
+  .action-btn {
+    padding: 6px 8px;
+    font-size: 9.5px;
+  }
+  .user-chip {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+    padding-left: 0;
+    padding-top: 8px;
+    border-left: none;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .user-email { max-width: none; flex: 1; }
+
+  /* Strip: 2×2 grid */
+  .strip { grid-template-columns: 1fr 1fr; }
+  .strip-value { font-size: 16px; }
+
+  /* Show lane indicator dots */
+  .lane-dots { display: flex; }
+
+  /* Lanes: horizontal swipeable carousel */
+  .lanes {
+    display: flex;
+    flex-direction: row;
+    grid-template-columns: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 0 calc(20px + env(safe-area-inset-bottom, 0px));
+    gap: 0;
+    scroll-padding-left: 14px;
+    flex: none;
+  }
+  .lanes::-webkit-scrollbar { display: none; }
+  .lanes { scrollbar-width: none; }
+
+  .lane {
+    flex: 0 0 auto;
+    width: calc(100vw - 32px);
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    margin-left: 14px;
+    height: auto;
+  }
+  .lane:last-child { margin-right: 14px; }
+
+  /* Lane content: no internal scroll on mobile (page scrolls) */
+  .lane-cards {
+    overflow: visible;
+    flex: none;
+  }
+
+  /* Bigger touch targets on prob bar */
+  .prob-bar { height: 18px; }
+  .prob-handle { width: 14px; }
+  .prob-row { gap: 10px; }
+  .prob-pct { font-size: 12px; }
+
+  /* Action buttons in expanded card sized for finger */
+  .card-action-btn { padding: 7px 12px; font-size: 10px; }
+
+  /* Slightly more breathing room inside cards */
+  .card { padding: 12px 14px 13px; }
+  .card-name { font-size: 13px; }
+  .card-company { font-size: 10.5px; }
+
+  /* Modal: full-width on mobile, single column */
   .modal-grid { grid-template-columns: 1fr; }
-  .modal { padding: 16px 16px 14px; }
+  .modal { padding: 16px 16px 14px; max-height: calc(100vh - 24px); }
+
+  /* Add-button respects iOS safe area */
+  .add-btn { margin-bottom: env(safe-area-inset-bottom, 0px); }
+}
+
+/* ── Very narrow screens (≤ 380px): squeeze a bit more ───── */
+@media (max-width: 380px) {
+  .logo-mark { font-size: 20px; }
+  .strip-value { font-size: 14px; }
+  .lane { width: calc(100vw - 24px); margin-left: 10px; }
+  .lane:last-child { margin-right: 10px; }
 }

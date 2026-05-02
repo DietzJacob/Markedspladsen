@@ -190,15 +190,17 @@ function renderTopbar() {
   const goal = state.prefs.goalThisYear || 0;
   const booked = state.prefs.bookedThisYear || 0;
   const weighted = totalWeighted();
-  const pct = goal > 0 ? Math.round((wonYear / goal) * 100) : 0;
+  const achieved = wonYear + booked;
+  const pct = goal > 0 ? Math.round((achieved / goal) * 100) : 0;
   const goalSub = goal > 0 ? `${pct}% nået` : "klik for at sætte mål";
   const bookedSub = booked > 0 ? "i år" : "klik for at rette";
+  const goalDisplay = goal > 0 ? fmtFraction(achieved, goal) : fmtKr(0);
   const stripCells = [
     { label: "vundet i år",     value: fmtKr(wonYear),  color: "#FDBA74", sub: "" },
     { label: "vægtet pipeline", value: fmtKr(weighted), color: "#F472B6", sub: "forventet" },
-    { label: "booket",          value: fmtKr(booked),   color: "#86EFAC", sub: bookedSub,
-      onclick: () => editPref("bookedThisYear", "booket i år", booked) },
-    { label: "mål 2026",        value: fmtKr(goal),     color: "#7DD3FC", sub: goalSub,
+    { label: "faktureret",      value: fmtKr(booked),   color: "#86EFAC", sub: bookedSub,
+      onclick: () => editPref("bookedThisYear", "faktureret i år", booked) },
+    { label: "mål 2026",        value: goalDisplay,     color: "#7DD3FC", sub: goalSub,
       onclick: () => editPref("goalThisYear", "mål 2026", goal) },
   ];
   const strip = el("div", { class: "strip" },
@@ -221,8 +223,8 @@ function renderTopbar() {
   );
   root.appendChild(strip);
 
-  const fillPct = goal > 0 ? Math.min(100, (wonYear / goal) * 100) : 0;
-  const markerPct = goal > 0 ? Math.min(100, ((wonYear + weighted) / goal) * 100) : 0;
+  const fillPct = goal > 0 ? Math.min(100, (achieved / goal) * 100) : 0;
+  const markerPct = goal > 0 ? Math.min(100, ((achieved + weighted) / goal) * 100) : 0;
   const goalBar = el("div", { class: "goal-bar" },
     el("div", { class: "goal-fill", style: { width: `${fillPct}%` } }),
     el("div", { class: "goal-marker", title: "vundet + vægtet", style: { left: `${markerPct}%` } })
@@ -485,6 +487,73 @@ function renderBoard() {
   const root = $("#lanes");
   root.innerHTML = "";
   for (const lane of LANES) root.appendChild(renderLane(lane));
+  renderLaneDots();
+  attachLaneScrollListener();
+}
+
+function renderLaneDots() {
+  const dotsRoot = $("#lane-dots");
+  if (!dotsRoot) return;
+  dotsRoot.innerHTML = "";
+  LANES.forEach((lane, i) => {
+    const tint = LANE_TINTS[lane.key];
+    const dot = el("div", {
+      class: "lane-dot" + (i === 0 ? " is-active" : ""),
+      style: { "--dot-color": tint.title, "--dot-glow": tint.glow },
+      "data-idx": i,
+      "aria-label": lane.title,
+      role: "button",
+      onclick: () => {
+        const target = document.querySelector(`.lane[data-lane="${lane.key}"]`);
+        if (target) target.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+      },
+    });
+    dotsRoot.appendChild(dot);
+  });
+}
+
+let laneScrollAttached = false;
+function attachLaneScrollListener() {
+  if (laneScrollAttached) return;
+  laneScrollAttached = true;
+  const lanesEl = $("#lanes");
+  if (!lanesEl) return;
+  let raf = null;
+  const update = () => {
+    raf = null;
+    const lanes = document.querySelectorAll(".lane");
+    if (!lanes.length) return;
+    const cRect = lanesEl.getBoundingClientRect();
+    const cCenter = cRect.left + lanesEl.clientWidth / 2;
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    lanes.forEach((lane, i) => {
+      const r = lane.getBoundingClientRect();
+      const center = r.left + r.width / 2;
+      const dist = Math.abs(center - cCenter);
+      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+    });
+    document.querySelectorAll(".lane-dot").forEach((d, i) => {
+      d.classList.toggle("is-active", i === bestIdx);
+    });
+  };
+  const onScroll = () => {
+    if (raf == null) raf = requestAnimationFrame(update);
+  };
+  lanesEl.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll, { passive: true });
+}
+
+function fmtFraction(a, g) {
+  if (g >= 1_000_000) {
+    const av = (a / 1_000_000).toFixed(1).replace(".", ",");
+    const gv = (g / 1_000_000).toFixed(1).replace(".", ",");
+    return `${av}/${gv} mio.`;
+  }
+  if (g >= 1000) {
+    return `${Math.round(a / 1000)}/${Math.round(g / 1000)}k`;
+  }
+  return `${Math.round(a)}/${Math.round(g)}`;
 }
 
 function parseKr(input) {
