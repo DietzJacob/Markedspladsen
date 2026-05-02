@@ -4,6 +4,7 @@ import {
   createWon, deleteWon,
   setPrefs, isUserEmpty, seedDemoData,
 } from "./db.js";
+import { auth, signOutUser } from "./auth.js";
 
 const TEMPS    = window.TEMPS;
 const LANES    = window.LANES;
@@ -17,7 +18,7 @@ const fmtKr     = window.fmtKr;
 const daysUntil = window.daysUntil;
 
 const state = {
-  user: window.__user,
+  user: null,
   pipeline: [],
   won: [],
   prefs: { bgPreset: "midnat", goalThisYear: 3500000, bookedThisYear: 1860000 },
@@ -155,9 +156,10 @@ function renderTopbar() {
           class: "action-btn",
           style: { "--btn-color": "#94a3b8", "--btn-shadow": "rgba(148,163,184,0.4)", color: "#94a3b8" },
           onclick: async () => {
-            try { await window.__signOut(); } catch (_) {}
+            try { await signOutUser(); } catch (_) {}
             window.location.replace("./login.html");
           },
+          type: "button",
         }, "log ud")
       ) : null
     )
@@ -185,19 +187,26 @@ function renderTopbar() {
   }
 
   const wonYear = thisYearWonTotal();
-  const goal = state.prefs.goalThisYear || 3500000;
+  const goal = state.prefs.goalThisYear || 0;
   const booked = state.prefs.bookedThisYear || 0;
   const weighted = totalWeighted();
   const pct = goal > 0 ? Math.round((wonYear / goal) * 100) : 0;
+  const goalSub = goal > 0 ? `${pct}% nået` : "klik for at sætte mål";
+  const bookedSub = booked > 0 ? "i år" : "klik for at rette";
   const stripCells = [
     { label: "vundet i år",     value: fmtKr(wonYear),  color: "#FDBA74", sub: "" },
     { label: "vægtet pipeline", value: fmtKr(weighted), color: "#F472B6", sub: "forventet" },
-    { label: "booket",          value: fmtKr(booked),   color: "#86EFAC", sub: "i år" },
-    { label: "mål 2026",        value: fmtKr(goal),     color: "#7DD3FC", sub: `${pct}% nået` },
+    { label: "booket",          value: fmtKr(booked),   color: "#86EFAC", sub: bookedSub,
+      onclick: () => editPref("bookedThisYear", "booket i år", booked) },
+    { label: "mål 2026",        value: fmtKr(goal),     color: "#7DD3FC", sub: goalSub,
+      onclick: () => editPref("goalThisYear", "mål 2026", goal) },
   ];
   const strip = el("div", { class: "strip" },
     ...stripCells.map(c =>
-      el("div", { class: "strip-cell" },
+      el("div", {
+        class: "strip-cell" + (c.onclick ? " is-editable" : ""),
+        onclick: c.onclick ? (e) => { e.stopPropagation(); c.onclick(); } : null,
+      },
         el("div", { class: "strip-label" }, c.label),
         el("div", {
           class: "strip-value",
@@ -476,6 +485,34 @@ function renderBoard() {
   const root = $("#lanes");
   root.innerHTML = "";
   for (const lane of LANES) root.appendChild(renderLane(lane));
+}
+
+function parseKr(input) {
+  if (input == null) return null;
+  let s = String(input).trim().toLowerCase().replace(/\s|kr\.?|dkk/g, "").replace(",", ".");
+  if (!s) return 0;
+  let m;
+  if ((m = s.match(/^(\d+(?:\.\d+)?)mio\.?$/))) return Math.round(parseFloat(m[1]) * 1_000_000);
+  if ((m = s.match(/^(\d+(?:\.\d+)?)k$/)))      return Math.round(parseFloat(m[1]) * 1000);
+  if ((m = s.match(/^\d+(?:\.\d+)?$/)))          return Math.round(parseFloat(s));
+  return null;
+}
+
+async function editPref(key, label, currentValue) {
+  const fmt = currentValue ? fmtKr(currentValue) : "0";
+  const input = prompt(`Ny værdi for "${label}" i kr.\nSkriv som tal (fx 2500000) eller forkortet (fx "2,5 mio." eller "1500k").`, fmt);
+  if (input === null) return;
+  const parsed = parseKr(input);
+  if (parsed === null || parsed < 0) {
+    showToast("Ugyldigt beløb — prøv fx 2500000 eller 2,5 mio.", "error");
+    return;
+  }
+  try {
+    await setPrefs(state.user.uid, { [key]: parsed });
+    showToast("Gemt", "info");
+  } catch (err) {
+    showToast("Kunne ikke gemme: " + (err.code || err.message), "error");
+  }
 }
 
 function debounce(fn, ms) {
@@ -764,6 +801,22 @@ function describeFirestoreError(err) {
 
 async function init() {
   applyBg();
+
+  if (typeof auth.authStateReady === "function") {
+    await auth.authStateReady();
+  } else {
+    await new Promise((resolve) => {
+      const t = setInterval(() => {
+        if (auth.currentUser !== undefined) { clearInterval(t); resolve(); }
+      }, 30);
+    });
+  }
+  if (!auth.currentUser) {
+    window.location.replace("./login.html");
+    return;
+  }
+  state.user = auth.currentUser;
+
   renderTopbar();
   renderBoard();
 
@@ -779,8 +832,8 @@ async function init() {
     try {
       await seedDemoData(uid, SEED_PIPELINE, SEED_WON, {
         bgPreset: "midnat",
-        goalThisYear: SEED_ALL_TIME.goalThisYear,
-        bookedThisYear: SEED_ALL_TIME.bookedThisYear,
+        goalThisYear: 0,
+        bookedThisYear: 0,
       });
       showToast("Demo-data oprettet — du kan slette dem og oprette dine egne", "info");
     } catch (err) {

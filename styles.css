@@ -188,7 +188,10 @@ button {
 .strip-cell {
   padding: 8px 12px;
   background: rgba(20,24,40,0.4);
+  transition: background 0.12s;
 }
+.strip-cell.is-editable { cursor: pointer; }
+.strip-cell.is-editable:hover { background: rgba(20,24,40,0.65); }
 .strip-label {
   font-family: "JetBrains Mono", monospace;
   font-size: 8.5px;
