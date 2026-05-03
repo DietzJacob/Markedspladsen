@@ -1,7 +1,7 @@
 import {
   watchPipeline, watchWon, watchUserDoc,
   createCard, updateCard, deleteCard,
-  createWon, deleteWon,
+  createWon, updateWon, deleteWon,
   setPrefs, isUserEmpty, seedDemoData,
 } from "./db.js";
 import { auth, signOutUser } from "./auth.js";
@@ -78,7 +78,18 @@ function thisYearWonTotal() {
   const year = new Date(TODAY_ISO).getFullYear();
   return state.won.reduce((s, d) => {
     const wy = d.wonDate ? new Date(d.wonDate).getFullYear() : null;
-    return wy === year ? s + d.value : s;
+    if (wy !== year) return s;
+    const status = d.status || "vundet";
+    return status === "vundet" ? s + d.value : s;
+  }, 0);
+}
+
+function thisYearFakturertTotal() {
+  const year = new Date(TODAY_ISO).getFullYear();
+  return state.won.reduce((s, d) => {
+    const wy = d.wonDate ? new Date(d.wonDate).getFullYear() : null;
+    if (wy !== year) return s;
+    return d.status === "faktureret" ? s + d.value : s;
   }, 0);
 }
 
@@ -187,20 +198,19 @@ function renderTopbar() {
   }
 
   const wonYear = thisYearWonTotal();
+  const fakturert = thisYearFakturertTotal();
   const goal = state.prefs.goalThisYear || 0;
-  const booked = state.prefs.bookedThisYear || 0;
   const weighted = totalWeighted();
-  const achieved = wonYear + booked;
+  const achieved = wonYear + fakturert;
   const pct = goal > 0 ? Math.round((achieved / goal) * 100) : 0;
   const goalSub = goal > 0 ? `${pct}% nået` : "klik for at sætte mål";
-  const bookedSub = booked > 0 ? "i år" : "klik for at rette";
+  const fakturertSub = fakturert > 0 ? "i år" : "rediger vundet → faktureret";
   const goalDisplay = goal > 0 ? fmtFraction(achieved, goal) : fmtKr(0);
   const stripCells = [
-    { label: "vundet i år",     value: fmtKr(wonYear),  color: "#FDBA74", sub: "" },
-    { label: "vægtet pipeline", value: fmtKr(weighted), color: "#F472B6", sub: "forventet" },
-    { label: "faktureret",      value: fmtKr(booked),   color: "#86EFAC", sub: bookedSub,
-      onclick: () => editPref("bookedThisYear", "faktureret i år", booked) },
-    { label: "mål 2026",        value: goalDisplay,     color: "#7DD3FC", sub: goalSub,
+    { label: "vundet i år",     value: fmtKr(wonYear),    color: "#FDBA74", sub: "" },
+    { label: "vægtet pipeline", value: fmtKr(weighted),   color: "#F472B6", sub: "forventet" },
+    { label: "faktureret",      value: fmtKr(fakturert),  color: "#86EFAC", sub: fakturertSub },
+    { label: "mål 2026",        value: goalDisplay,       color: "#7DD3FC", sub: goalSub,
       onclick: () => editPref("goalThisYear", "mål 2026", goal) },
   ];
   const strip = el("div", { class: "strip" },
@@ -282,7 +292,11 @@ function renderCard(card) {
   bar.appendChild(handle);
   const pct = el("span", { class: "prob-pct" }, `${card.probability}%`);
   const probRow = el("div", { class: "prob-row" }, bar, pct);
-  probRow.addEventListener("click", (e) => e.stopPropagation());
+  probRow.addEventListener("click", (e) => {
+    if (state.openId === card.id) e.stopPropagation();
+  });
+  bar.style.cursor = expanded ? "ew-resize" : "default";
+  bar.title = expanded ? "Træk for at justere sandsynlighed" : "Klik kortet for at folde ud og redigere";
 
   let lastWritten = card.probability;
   const writeDebounced = debounce((v) => {
@@ -307,6 +321,7 @@ function renderCard(card) {
     writeDebounced(v);
   };
   bar.addEventListener("pointerdown", (e) => {
+    if (state.openId !== card.id) return;
     e.stopPropagation();
     e.preventDefault();
     try { bar.setPointerCapture(e.pointerId); } catch (_) {}
@@ -376,14 +391,19 @@ function renderCard(card) {
 }
 
 function renderWonCard(card) {
-  const tint = LANE_TINTS.won;
+  const isFakturert = card.status === "faktureret";
+  const accent = isFakturert ? "#86EFAC" : "#FDBA74";
+  const bg     = isFakturert ? "rgba(134,239,172,0.10)" : "rgba(251,146,60,0.08)";
+  const border = isFakturert ? "rgba(134,239,172,0.40)" : "rgba(251,146,60,0.32)";
+  const glow   = isFakturert ? "rgba(134,239,172,0.30)" : "rgba(251,146,60,0.20)";
+
   const node = el("div", {
-    class: "won-card",
+    class: "won-card" + (isFakturert ? " is-faktureret" : ""),
     style: {
-      "--lane-bg": tint.bg,
-      "--lane-border": tint.border,
-      "--lane-title": tint.title,
-      "--lane-glow": tint.glow,
+      "--lane-bg": bg,
+      "--lane-border": border,
+      "--lane-title": accent,
+      "--lane-glow": glow,
     },
     onclick: () => {
       state.openId = state.openId === card.id ? null : card.id;
@@ -398,7 +418,7 @@ function renderWonCard(card) {
     ),
     el("div", { style: { textAlign: "right" } },
       el("div", { class: "card-value" }, `+${fmtKr(card.value)}`),
-      el("div", { class: "card-value-unit" }, "kr · vundet")
+      el("div", { class: "card-value-unit" }, isFakturert ? "kr · faktureret" : "kr · vundet")
     )
   ));
 
@@ -412,10 +432,40 @@ function renderWonCard(card) {
   if (state.openId === card.id) {
     node.appendChild(el("div", { class: "card-actions" },
       el("button", {
+        class: "card-action-btn",
+        onclick: (e) => { e.stopPropagation(); openWonModal({ mode: "edit", card }); },
+      }, "rediger"),
+      isFakturert
+        ? el("button", {
+            class: "card-action-btn",
+            onclick: async (e) => {
+              e.stopPropagation();
+              try {
+                await updateWon(state.user.uid, card.id, { status: "vundet" });
+                showToast("Markeret som vundet igen", "info");
+              } catch (err) {
+                showToast("Kunne ikke skifte: " + (err.code || err.message), "error");
+              }
+            },
+          }, "→ vundet")
+        : el("button", {
+            class: "card-action-btn",
+            style: { borderColor: "rgba(134,239,172,0.5)", color: "#86EFAC" },
+            onclick: async (e) => {
+              e.stopPropagation();
+              try {
+                await updateWon(state.user.uid, card.id, { status: "faktureret" });
+                showToast("Markeret som faktureret", "info");
+              } catch (err) {
+                showToast("Kunne ikke skifte: " + (err.code || err.message), "error");
+              }
+            },
+          }, "→ faktureret"),
+      el("button", {
         class: "card-action-btn is-danger",
         onclick: async (e) => {
           e.stopPropagation();
-          if (!confirm(`Slet vundet deal "${card.name}"?`)) return;
+          if (!confirm(`Slet "${card.name}"?`)) return;
           try {
             await deleteWon(state.user.uid, card.id);
             showToast("Slettet", "info");
@@ -447,20 +497,50 @@ function renderLane(lane) {
     },
   });
 
+  let countLabel;
+  if (isWon) {
+    const v = cards.filter(c => (c.status || "vundet") === "vundet").length;
+    const f = cards.filter(c => c.status === "faktureret").length;
+    countLabel = `${v} vundet · ${f} fakt.`;
+  } else {
+    countLabel = `${cards.length} kort`;
+  }
+
   laneEl.appendChild(el("div", { class: "lane-header" },
     el("div", { class: "lane-title-row" },
       el("div", { class: "lane-title" }, lane.title),
-      el("div", { class: "lane-count" }, `${cards.length} ${isWon ? "deals" : "kort"}`)
+      el("div", { class: "lane-count" }, countLabel)
     ),
     el("div", { class: "lane-subtitle" }, lane.subtitle),
     el("div", { class: "lane-total" },
-      el("span", { class: "lane-total-label" }, isWon ? "vundet" : "vægtet"),
+      el("span", { class: "lane-total-label" }, isWon ? "i alt" : "vægtet"),
       el("span", { class: "lane-total-value" }, `${fmtKr(total)} kr`)
     )
   ));
 
   const list = el("div", { class: "lane-cards" });
-  for (const c of cards) list.appendChild(isWon ? renderWonCard(c) : renderCard(c));
+  if (isWon) {
+    const vundet    = cards.filter(c => (c.status || "vundet") === "vundet")
+                           .sort((a,b) => (b.wonDate||"").localeCompare(a.wonDate||""));
+    const fakturert = cards.filter(c => c.status === "faktureret")
+                           .sort((a,b) => (b.wonDate||"").localeCompare(a.wonDate||""));
+    if (vundet.length) {
+      list.appendChild(el("div", {
+        class: "won-group-label",
+        style: { "--g-color": "#FDBA74", "--g-glow": "rgba(251,146,60,0.30)" },
+      }, "vundet"));
+      for (const c of vundet) list.appendChild(renderWonCard(c));
+    }
+    if (fakturert.length) {
+      list.appendChild(el("div", {
+        class: "won-group-label",
+        style: { "--g-color": "#86EFAC", "--g-glow": "rgba(134,239,172,0.30)" },
+      }, "faktureret"));
+      for (const c of fakturert) list.appendChild(renderWonCard(c));
+    }
+  } else {
+    for (const c of cards) list.appendChild(renderCard(c));
+  }
   list.appendChild(el("button", {
     class: "add-btn",
     onclick: (e) => {
@@ -701,7 +781,7 @@ function openCardModal({ mode, card, lane }) {
 function openWonModal({ mode, card }) {
   const isEdit = mode === "edit";
   const data = isEdit ? card : {
-    name: "", company: "", value: 0,
+    name: "", company: "", value: 0, status: "vundet",
     wonDate: TODAY_ISO, deliverBy: TODAY_ISO, note: "",
   };
   const root = $("#modal");
@@ -716,6 +796,7 @@ function openWonModal({ mode, card }) {
         name: fd.get("name").trim(),
         company: fd.get("company").trim(),
         value: Math.max(0, +fd.get("value") || 0),
+        status: fd.get("status") || "vundet",
         wonDate: fd.get("wonDate"),
         deliverBy: fd.get("deliverBy"),
         note: fd.get("note").trim(),
@@ -727,8 +808,13 @@ function openWonModal({ mode, card }) {
       const submitBtn = form.querySelector(".modal-submit");
       submitBtn.disabled = true;
       try {
-        await createWon(state.user.uid, payload);
-        showToast("Oprettet", "info");
+        if (isEdit) {
+          await updateWon(state.user.uid, card.id, payload);
+          showToast("Gemt", "info");
+        } else {
+          await createWon(state.user.uid, payload);
+          showToast("Oprettet", "info");
+        }
         closeModal();
       } catch (err) {
         showToast("Kunne ikke gemme: " + (err.code || err.message), "error");
@@ -739,9 +825,12 @@ function openWonModal({ mode, card }) {
 
   form.appendChild(el("div", { class: "modal-title" }, isEdit ? "Rediger deal" : "Ny vundet deal"));
 
+  const statusOpts = [["vundet", "vundet"], ["faktureret", "faktureret"]];
+
   const fields = [
     field("name",      "navn",       el("input", { class: "modal-input", name: "name", value: data.name, required: true, autocomplete: "off" })),
     field("company",   "firma",      el("input", { class: "modal-input", name: "company", value: data.company, required: true, autocomplete: "off" })),
+    field("status",    "status",     select("status", statusOpts, data.status || "vundet")),
     field("value",     "værdi (kr)", el("input", { class: "modal-input", name: "value", type: "number", min: 0, step: 1000, value: data.value, required: true })),
     field("wonDate",   "vundet dato", el("input", { class: "modal-input", name: "wonDate", type: "date", value: data.wonDate, required: true })),
     field("deliverBy", "leverer",    el("input", { class: "modal-input", name: "deliverBy", type: "date", value: data.deliverBy, required: true })),
@@ -751,7 +840,7 @@ function openWonModal({ mode, card }) {
 
   form.appendChild(el("div", { class: "modal-actions" },
     el("button", { type: "button", class: "modal-cancel", onclick: closeModal }, "Annullér"),
-    el("button", { type: "submit", class: "modal-submit" }, "Opret")
+    el("button", { type: "submit", class: "modal-submit" }, isEdit ? "Gem" : "Opret")
   ));
 
   root.appendChild(form);

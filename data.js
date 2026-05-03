@@ -161,7 +161,7 @@ const LANES = [
   { key: "now",     title: "Denne uge",       subtitle: "uge 18 — 4. til 8. maj" },
   { key: "next",    title: "Næste uge",       subtitle: "uge 19 — 11. til 15. maj" },
   { key: "bubbles", title: "Bobler derude",   subtitle: "alt andet i pipen" },
-  { key: "won",     title: "Vundet — landet", subtitle: "seneste deals · går til levering" },
+  { key: "won",     title: "Vundet / Faktureret", subtitle: "rediger en deal for at skifte status" },
 ];
 
 // Per-lane palette

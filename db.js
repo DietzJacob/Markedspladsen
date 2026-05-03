@@ -67,6 +67,10 @@ export async function createWon(uid, data) {
   return ref.id;
 }
 
+export async function updateWon(uid, id, patch) {
+  await updateDoc(wonDoc(uid, id), patch);
+}
+
 export async function deleteWon(uid, id) {
   await deleteDoc(wonDoc(uid, id));
 }

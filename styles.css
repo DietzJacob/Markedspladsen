@@ -528,19 +528,46 @@ button {
 
 /* ── Won card ─────────────────────────────────────────────── */
 .won-card {
-  background: var(--card-surface-won);
+  background: var(--lane-bg, var(--card-surface-won));
   border: 1px solid var(--lane-border);
   border-radius: 4px;
   padding: 10px 12px;
   color: var(--text-primary);
+  cursor: pointer;
   animation: cardFadeIn 0.32s ease both;
+  transition: transform 0.12s ease;
 }
+.won-card:hover { transform: translateY(-1px); }
 .won-card .card-value {
-  color: var(--accent-amber);
+  color: var(--lane-title, var(--accent-amber));
   font-weight: 700;
   text-shadow: 0 0 8px var(--lane-glow);
 }
 .won-card .card-value-unit { color: var(--text-quaternary); }
+
+/* Group label inside the won lane (vundet / faktureret divider) */
+.won-group-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--g-color, var(--text-secondary));
+  text-shadow: 0 0 6px var(--g-glow, transparent);
+  padding: 6px 2px 4px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.won-group-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--g-color, rgba(255,255,255,0.1));
+  opacity: 0.25;
+}
+.lane-cards .won-group-label:first-child { margin-top: 0; }
 
 .won-meta {
   margin-top: 8px;
@@ -862,9 +889,14 @@ body.modal-open { overflow: hidden; }
 }
 
 /* ── Responsive: mobile / squeezed desktop (≤ 768px) ─────── */
-@media (max-width: 768px) {
-  html, body { overflow: auto; height: auto; }
-  .app { width: 100%; height: auto; min-height: 100vh; overflow: visible; }
+@media (max-width: 900px) {
+  html, body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: auto;
+    max-width: 100vw;
+  }
+  .app { width: 100%; max-width: 100vw; height: auto; min-height: 100vh; overflow: visible; }
 
   /* Topbar: stack rows so all 4 buttons + user fit */
   .topbar { padding: 12px 14px 10px; }
