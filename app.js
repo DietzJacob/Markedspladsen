@@ -70,6 +70,16 @@ function totalWeighted() {
   return state.pipeline.reduce((s, c) => s + (c.value * c.probability) / 100, 0);
 }
 
+function nearTermRaw() {
+  return state.pipeline.reduce((s, c) => {
+    return (c.lane === "now" || c.lane === "next") ? s + c.value : s;
+  }, 0);
+}
+
+function totalRaw() {
+  return state.pipeline.reduce((s, c) => s + c.value, 0);
+}
+
 function wonTotal() {
   return state.won.reduce((s, d) => s + d.value, 0);
 }
@@ -200,17 +210,19 @@ function renderTopbar() {
   const wonYear = thisYearWonTotal();
   const fakturert = thisYearFakturertTotal();
   const goal = state.prefs.goalThisYear || 0;
-  const weighted = totalWeighted();
+  const vaegtet = nearTermRaw();
+  const raa = totalRaw();
   const achieved = wonYear + fakturert;
   const pct = goal > 0 ? Math.round((achieved / goal) * 100) : 0;
   const goalSub = goal > 0 ? `${pct}% nået` : "klik for at sætte mål";
   const fakturertSub = fakturert > 0 ? "i år" : "rediger vundet → faktureret";
   const goalDisplay = goal > 0 ? fmtFraction(achieved, goal) : fmtKr(0);
+  const pipelineDisplay = raa > 0 ? fmtFraction(vaegtet, raa) : fmtKr(0);
   const stripCells = [
-    { label: "vundet i år",     value: fmtKr(wonYear),    color: "#FDBA74", sub: "" },
-    { label: "vægtet pipeline", value: fmtKr(weighted),   color: "#F472B6", sub: "forventet" },
-    { label: "faktureret",      value: fmtKr(fakturert),  color: "#86EFAC", sub: fakturertSub },
-    { label: "mål 2026",        value: goalDisplay,       color: "#7DD3FC", sub: goalSub,
+    { label: "vundet i år",   value: fmtKr(wonYear),   color: "#FDBA74", sub: "" },
+    { label: "vægtet / rå",   value: pipelineDisplay,  color: "#F472B6", sub: "denne+næste / alt" },
+    { label: "faktureret",    value: fmtKr(fakturert), color: "#86EFAC", sub: fakturertSub },
+    { label: "mål 2026",      value: goalDisplay,      color: "#7DD3FC", sub: goalSub,
       onclick: () => editPref("goalThisYear", "mål 2026", goal) },
   ];
   const strip = el("div", { class: "strip" },
@@ -234,10 +246,10 @@ function renderTopbar() {
   root.appendChild(strip);
 
   const fillPct = goal > 0 ? Math.min(100, (achieved / goal) * 100) : 0;
-  const markerPct = goal > 0 ? Math.min(100, ((achieved + weighted) / goal) * 100) : 0;
+  const markerPct = goal > 0 ? Math.min(100, ((achieved + vaegtet) / goal) * 100) : 0;
   const goalBar = el("div", { class: "goal-bar" },
     el("div", { class: "goal-fill", style: { width: `${fillPct}%` } }),
-    el("div", { class: "goal-marker", title: "vundet + vægtet", style: { left: `${markerPct}%` } })
+    el("div", { class: "goal-marker", title: "opnået + vægtet pipeline", style: { left: `${markerPct}%` } })
   );
   root.appendChild(goalBar);
 }
