@@ -76,6 +76,15 @@ function nearTermRaw() {
   }, 0);
 }
 
+function nearTermWeighted() {
+  return state.pipeline.reduce((s, c) => {
+    if (c.lane === "now" || c.lane === "next") {
+      return s + (c.value * c.probability) / 100;
+    }
+    return s;
+  }, 0);
+}
+
 function totalRaw() {
   return state.pipeline.reduce((s, c) => s + c.value, 0);
 }
@@ -210,8 +219,8 @@ function renderTopbar() {
   const wonYear = thisYearWonTotal();
   const fakturert = thisYearFakturertTotal();
   const goal = state.prefs.goalThisYear || 0;
-  const vaegtet = nearTermRaw();
-  const raa = totalRaw();
+  const vaegtet = nearTermWeighted();
+  const raa = nearTermRaw();
   const achieved = wonYear + fakturert;
   const pct = goal > 0 ? Math.round((achieved / goal) * 100) : 0;
   const goalSub = goal > 0 ? `${pct}% nået` : "klik for at sætte mål";
@@ -220,7 +229,7 @@ function renderTopbar() {
   const pipelineDisplay = raa > 0 ? fmtFraction(vaegtet, raa) : fmtKr(0);
   const stripCells = [
     { label: "vundet i år",   value: fmtKr(wonYear),   color: "#FDBA74", sub: "" },
-    { label: "vægtet / rå",   value: pipelineDisplay,  color: "#F472B6", sub: "denne+næste / alt" },
+    { label: "vægtet / rå",   value: pipelineDisplay,  color: "#F472B6", sub: "denne + næste" },
     { label: "faktureret",    value: fmtKr(fakturert), color: "#86EFAC", sub: fakturertSub },
     { label: "mål 2026",      value: goalDisplay,      color: "#7DD3FC", sub: goalSub,
       onclick: () => editPref("goalThisYear", "mål 2026", goal) },
