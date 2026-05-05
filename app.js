@@ -1001,20 +1001,30 @@ async function init() {
 
   const uid = state.user.uid;
 
-  let firstSnapshotDone = false;
-  let seedAttempted = false;
-  const tryAutoSeed = async () => {
-    if (seedAttempted) return;
-    seedAttempted = true;
-    if (!state.loaded.pipeline || !state.loaded.won) return;
-    if (state.pipeline.length > 0 || state.won.length > 0) return;
+  let seedChecked = false;
+  const maybeAutoSeed = async () => {
+    if (seedChecked) return;
+    if (!state.loaded.prefs) return;
+
+    if (state.prefs.seededAt) {
+      seedChecked = true;
+      return;
+    }
+
+    seedChecked = true;
     try {
+      const empty = await isUserEmpty(uid);
+      if (!empty) {
+        await setPrefs(uid, { seededAt: Date.now() });
+        return;
+      }
       await seedDemoData(uid, SEED_PIPELINE, SEED_WON, {
         bgPreset: "midnat",
         goalThisYear: 0,
         bookedThisYear: 0,
+        seededAt: Date.now(),
       });
-      showToast("Demo-data oprettet — du kan slette dem og oprette dine egne", "info");
+      showToast("Demo-data oprettet — du kan slette dem", "info");
     } catch (err) {
       showToast(describeFirestoreError(err), "error");
     }
@@ -1027,10 +1037,6 @@ async function init() {
       state.loaded.pipeline = true;
       renderTopbar();
       renderBoard();
-      if (!firstSnapshotDone && state.loaded.pipeline && state.loaded.won) {
-        firstSnapshotDone = true;
-        tryAutoSeed();
-      }
     },
     (err) => showErrorBanner(describeFirestoreError(err))
   );
@@ -1042,10 +1048,6 @@ async function init() {
       state.loaded.won = true;
       renderTopbar();
       renderBoard();
-      if (!firstSnapshotDone && state.loaded.pipeline && state.loaded.won) {
-        firstSnapshotDone = true;
-        tryAutoSeed();
-      }
     },
     (err) => showErrorBanner(describeFirestoreError(err))
   );
@@ -1055,12 +1057,14 @@ async function init() {
       const prefs = (data && data.prefs) || {};
       state.prefs = {
         bgPreset: prefs.bgPreset || "midnat",
-        goalThisYear: prefs.goalThisYear || 3500000,
-        bookedThisYear: prefs.bookedThisYear || 1860000,
+        goalThisYear: prefs.goalThisYear || 0,
+        bookedThisYear: prefs.bookedThisYear || 0,
+        seededAt: prefs.seededAt || null,
       };
       state.loaded.prefs = true;
       applyBg();
       renderTopbar();
+      maybeAutoSeed();
     },
     (err) => showErrorBanner(describeFirestoreError(err))
   );

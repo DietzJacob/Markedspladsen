@@ -91,7 +91,7 @@ export async function seedDemoData(uid, pipeline, wonDeals, prefs) {
   const tasks = [];
   for (const c of pipeline) {
     const { id, ...rest } = c;
-    tasks.push(setDoc(pipelineDoc(uid, id), {
+    tasks.push(addDoc(pipelineCol(uid), {
       ...rest,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -99,7 +99,7 @@ export async function seedDemoData(uid, pipeline, wonDeals, prefs) {
   }
   for (const d of wonDeals) {
     const { id, ...rest } = d;
-    tasks.push(setDoc(wonDoc(uid, id), {
+    tasks.push(addDoc(wonCol(uid), {
       ...rest,
       createdAt: serverTimestamp(),
     }));
