@@ -580,7 +580,16 @@ function renderLane(lane) {
       for (const c of fakturert) list.appendChild(renderWonCard(c));
     }
   } else {
-    for (const c of cards) list.appendChild(renderCard(c));
+    const minBord = cards.filter(c => !c.awaiting);
+    const deresBord = cards.filter(c => c.awaiting);
+    for (const c of minBord) list.appendChild(renderCard(c));
+    if (deresBord.length) {
+      list.appendChild(el("div", {
+        class: "won-group-label",
+        style: { "--g-color": "#7DD3FC", "--g-glow": "rgba(125,211,252,0.30)" },
+      }, "afventer dem"));
+      for (const c of deresBord) list.appendChild(renderCard(c));
+    }
   }
   list.appendChild(el("button", {
     class: "add-btn",
