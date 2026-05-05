@@ -651,6 +651,42 @@ button {
   color: #FAC0AE;
 }
 
+.card-action-btn.is-azure {
+  border-color: rgba(125,211,252,0.45);
+  color: #7DD3FC;
+}
+.card-action-btn.is-azure:hover {
+  background: rgba(125,211,252,0.10);
+  border-color: rgba(125,211,252,0.75);
+  color: #B6E5FD;
+}
+
+/* ── Awaiting (bolden hos dem) ─────────────────────────────── */
+.card.is-awaiting {
+  opacity: 0.65;
+  transition: opacity 0.18s ease;
+}
+.card.is-awaiting:hover {
+  opacity: 0.92;
+}
+.awaiting-tag {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(125, 211, 252, 0.10);
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  border-radius: 3px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7DD3FC;
+  text-shadow: 0 0 6px rgba(125,211,252,0.30);
+  align-self: flex-start;
+}
+
 /* ── Modal ────────────────────────────────────────────────── */
 .modal-backdrop {
   position: fixed;

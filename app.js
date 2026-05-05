@@ -270,6 +270,7 @@ function renderCard(card) {
   const overdue = days < 0;
   const soon = days >= 0 && days <= 2;
   const expanded = state.openId === card.id;
+  const awaiting = !!card.awaiting;
 
   const tempStyle = {
     "--temp-color":    t.color,
@@ -284,7 +285,7 @@ function renderCard(card) {
   };
 
   const cardEl = el("div", {
-    class: "card" + (overdue ? " is-overdue" : ""),
+    class: "card" + (overdue ? " is-overdue" : "") + (awaiting ? " is-awaiting" : ""),
     style: tempStyle,
     onclick: () => {
       state.openId = state.openId === card.id ? null : card.id;
@@ -367,6 +368,10 @@ function renderCard(card) {
     el("span", { class: "next-text" }, card.nextStep || "—")
   ));
 
+  if (awaiting) {
+    cardEl.appendChild(el("div", { class: "awaiting-tag" }, "⏳ bolden er hos dem"));
+  }
+
   let statusText = t.label.toLowerCase();
   let metaClass = "card-meta";
   if (overdue) { statusText = "↯ overskredet"; metaClass += " is-overdue"; }
@@ -386,6 +391,18 @@ function renderCard(card) {
       card.note ? el("div", { class: "quote" }, `"${card.note}"`) : null,
       ...log.slice(0, 2).map(l => el("div", { class: "log-line" }, `· ${l}`)),
       el("div", { class: "card-actions" },
+        el("button", {
+          class: "card-action-btn" + (awaiting ? "" : " is-azure"),
+          onclick: async (e) => {
+            e.stopPropagation();
+            try {
+              await updateCard(state.user.uid, card.id, { awaiting: !awaiting });
+              showToast(awaiting ? "Bolden er hos dig igen" : "Bolden er sendt videre", "info");
+            } catch (err) {
+              showToast("Fejl: " + (err.code || err.message), "error");
+            }
+          },
+        }, awaiting ? "← min tur igen" : "→ afventer dem"),
         el("button", {
           class: "card-action-btn",
           onclick: (e) => { e.stopPropagation(); openCardModal({ mode: "edit", card }); },
@@ -524,7 +541,10 @@ function renderLane(lane) {
     const f = cards.filter(c => c.status === "faktureret").length;
     countLabel = `${v} vundet · ${f} fakt.`;
   } else {
-    countLabel = `${cards.length} kort`;
+    const awaitingCount = cards.filter(c => c.awaiting).length;
+    countLabel = awaitingCount > 0
+      ? `${cards.length} kort · ${awaitingCount} afv.`
+      : `${cards.length} kort`;
   }
 
   laneEl.appendChild(el("div", { class: "lane-header" },
