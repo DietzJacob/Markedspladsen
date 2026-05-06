@@ -2,7 +2,7 @@ import {
   watchPipeline, watchWon, watchUserDoc,
   createCard, updateCard, deleteCard,
   createWon, updateWon, deleteWon,
-  setPrefs, isUserEmpty, seedDemoData,
+  setPrefs, isUserEmpty, seedDemoData, wipeMatchingCards,
 } from "./db.js";
 import { auth, signOutUser } from "./auth.js";
 
@@ -151,9 +151,47 @@ function showErrorBanner(msg) {
   ));
 }
 
+function hasDemoData() {
+  const matchKey = (a) => `${a.name || ""}|||${a.company || ""}`;
+  const pipeKeys = new Set(SEED_PIPELINE.map(matchKey));
+  const wonKeys  = new Set(SEED_WON.map(matchKey));
+  return state.pipeline.some(c => pipeKeys.has(matchKey(c)))
+      || state.won.some(c => wonKeys.has(matchKey(c)));
+}
+
+async function wipeDemo() {
+  const ok = confirm("Slet alle demo-kort (Mette Lindholm, Jonas Bramsen osv.)? Dine egne kort beholdes.");
+  if (!ok) return;
+  try {
+    const count = await wipeMatchingCards(state.user.uid, SEED_PIPELINE, SEED_WON);
+    showToast(`Slettet ${count} demo-kort`, "info");
+  } catch (err) {
+    showToast("Fejl: " + (err.code || err.message), "error");
+  }
+}
+
 function renderTopbar() {
   const root = $("#topbar");
   root.innerHTML = "";
+
+  const showDemoBtn = hasDemoData();
+
+  const actionDefs = [
+    { label: "+ ny",       color: "#FB923C", alpha: "rgba(251,146,60,0.4)",
+      onclick: (e) => { e.stopPropagation(); openCardModal({ mode: "create", lane: "now" }); } },
+    { label: "↓ export",   color: "#22D3EE", alpha: "rgba(34,211,238,0.4)",
+      onclick: (e) => { e.stopPropagation(); exportJson(); } },
+    { label: "↑ import",   color: "#A78BFA", alpha: "rgba(167,139,250,0.4)",
+      onclick: (e) => { e.stopPropagation(); importJson(); } },
+    { label: "⊙ baggrund", color: "#86EFAC", alpha: "rgba(134,239,172,0.4)",
+      onclick: (e) => { e.stopPropagation(); state.bgPickerOpen = !state.bgPickerOpen; renderTopbar(); } },
+  ];
+  if (showDemoBtn) {
+    actionDefs.push({
+      label: "× demo", color: "#94A3B8", alpha: "rgba(148,163,184,0.4)",
+      onclick: (e) => { e.stopPropagation(); wipeDemo(); },
+    });
+  }
 
   const row1 = el("div", { class: "topbar-row" },
     el("div", { class: "logo" },
@@ -164,16 +202,7 @@ function renderTopbar() {
       el("div", { class: "logo-meta" }, "København · uge 18 · 2026")
     ),
     el("div", { class: "actions" },
-      ...[
-        { label: "+ ny",        color: "#FB923C", alpha: "rgba(251,146,60,0.4)",
-          onclick: (e) => { e.stopPropagation(); openCardModal({ mode: "create", lane: "now" }); } },
-        { label: "↓ export",    color: "#22D3EE", alpha: "rgba(34,211,238,0.4)",
-          onclick: (e) => { e.stopPropagation(); exportJson(); } },
-        { label: "↑ import",    color: "#A78BFA", alpha: "rgba(167,139,250,0.4)",
-          onclick: (e) => { e.stopPropagation(); importJson(); } },
-        { label: "⊙ baggrund",  color: "#86EFAC", alpha: "rgba(134,239,172,0.4)",
-          onclick: (e) => { e.stopPropagation(); state.bgPickerOpen = !state.bgPickerOpen; renderTopbar(); } },
-      ].map(b =>
+      ...actionDefs.map(b =>
         el("button", {
           class: "action-btn",
           style: { "--btn-color": b.color, "--btn-shadow": b.alpha, color: b.color },
@@ -1030,35 +1059,6 @@ async function init() {
 
   const uid = state.user.uid;
 
-  let seedChecked = false;
-  const maybeAutoSeed = async () => {
-    if (seedChecked) return;
-    if (!state.loaded.prefs) return;
-
-    if (state.prefs.seededAt) {
-      seedChecked = true;
-      return;
-    }
-
-    seedChecked = true;
-    try {
-      const empty = await isUserEmpty(uid);
-      if (!empty) {
-        await setPrefs(uid, { seededAt: Date.now() });
-        return;
-      }
-      await seedDemoData(uid, SEED_PIPELINE, SEED_WON, {
-        bgPreset: "midnat",
-        goalThisYear: 0,
-        bookedThisYear: 0,
-        seededAt: Date.now(),
-      });
-      showToast("Demo-data oprettet — du kan slette dem", "info");
-    } catch (err) {
-      showToast(describeFirestoreError(err), "error");
-    }
-  };
-
   watchPipeline(uid,
     (cards) => {
       cards.sort((a, b) => (a.deadline || "").localeCompare(b.deadline || ""));
@@ -1093,7 +1093,6 @@ async function init() {
       state.loaded.prefs = true;
       applyBg();
       renderTopbar();
-      maybeAutoSeed();
     },
     (err) => showErrorBanner(describeFirestoreError(err))
   );
