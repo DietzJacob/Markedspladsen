@@ -87,6 +87,30 @@ export async function isUserEmpty(uid) {
   return pipeSnap.empty && wonSnap.empty;
 }
 
+export async function wipeMatchingCards(uid, pipelineMatchers, wonMatchers) {
+  const matchKey = (a) => `${a.name || ""}|||${a.company || ""}`;
+  const pipeKeys = new Set(pipelineMatchers.map(matchKey));
+  const wonKeys  = new Set(wonMatchers.map(matchKey));
+  const tasks = [];
+
+  const pipeSnap = await getDocs(pipelineCol(uid));
+  pipeSnap.forEach(d => {
+    if (pipeKeys.has(matchKey(d.data()))) {
+      tasks.push(deleteDoc(pipelineDoc(uid, d.id)));
+    }
+  });
+
+  const wonSnap = await getDocs(wonCol(uid));
+  wonSnap.forEach(d => {
+    if (wonKeys.has(matchKey(d.data()))) {
+      tasks.push(deleteDoc(wonDoc(uid, d.id)));
+    }
+  });
+
+  await Promise.all(tasks);
+  return tasks.length;
+}
+
 export async function seedDemoData(uid, pipeline, wonDeals, prefs) {
   const tasks = [];
   for (const c of pipeline) {
