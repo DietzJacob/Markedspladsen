@@ -2,7 +2,7 @@ import {
   watchPipeline, watchWon, watchUserDoc,
   createCard, updateCard, deleteCard,
   createWon, updateWon, deleteWon,
-  setPrefs, isUserEmpty, seedDemoData, wipeMatchingCards,
+  setPrefs, isUserEmpty, seedDemoData, wipeMatchingCards, findAndDeleteDuplicates,
 } from "./db.js";
 import { auth, signOutUser } from "./auth.js";
 
@@ -170,6 +170,36 @@ async function wipeDemo() {
   }
 }
 
+function countLocalDuplicates() {
+  let extras = 0;
+  const pipeGroups = new Map();
+  for (const c of state.pipeline) {
+    const k = `${c.name || ""}|${c.company || ""}|${c.value || 0}`;
+    pipeGroups.set(k, (pipeGroups.get(k) || 0) + 1);
+  }
+  for (const v of pipeGroups.values()) if (v > 1) extras += v - 1;
+  const wonGroups = new Map();
+  for (const c of state.won) {
+    const k = `${c.name || ""}|${c.company || ""}|${c.value || 0}|${c.wonDate || ""}`;
+    wonGroups.set(k, (wonGroups.get(k) || 0) + 1);
+  }
+  for (const v of wonGroups.values()) if (v > 1) extras += v - 1;
+  return extras;
+}
+
+async function dedupe() {
+  const count = countLocalDuplicates();
+  if (count === 0) { showToast("Ingen dubletter fundet", "info"); return; }
+  const ok = confirm(`Slet ${count} dublet${count === 1 ? "" : "ter"}? Ældste kort i hver gruppe beholdes (matchet på navn + firma + værdi).`);
+  if (!ok) return;
+  try {
+    const removed = await findAndDeleteDuplicates(state.user.uid);
+    showToast(`Slettet ${removed} dublet${removed === 1 ? "" : "ter"}`, "info");
+  } catch (err) {
+    showToast("Fejl: " + (err.code || err.message), "error");
+  }
+}
+
 function renderTopbar() {
   const root = $("#topbar");
   root.innerHTML = "";
@@ -190,6 +220,14 @@ function renderTopbar() {
     actionDefs.push({
       label: "× demo", color: "#94A3B8", alpha: "rgba(148,163,184,0.4)",
       onclick: (e) => { e.stopPropagation(); wipeDemo(); },
+    });
+  }
+  const dupCount = countLocalDuplicates();
+  if (dupCount > 0) {
+    actionDefs.push({
+      label: `× ${dupCount} dublet${dupCount === 1 ? "" : "ter"}`,
+      color: "#A78BFA", alpha: "rgba(167,139,250,0.4)",
+      onclick: (e) => { e.stopPropagation(); dedupe(); },
     });
   }
 
@@ -644,10 +682,31 @@ function refreshLaneTotal(laneKey) {
 
 function renderBoard() {
   const root = $("#lanes");
+
+  const pageScrollY = window.scrollY;
+  const lanesScrollLeft = root.scrollLeft;
+  const laneScrollTops = {};
+  document.querySelectorAll(".lane-cards").forEach(elList => {
+    const laneEl = elList.closest(".lane");
+    if (laneEl && laneEl.dataset.lane) {
+      laneScrollTops[laneEl.dataset.lane] = elList.scrollTop;
+    }
+  });
+
   root.innerHTML = "";
   for (const lane of LANES) root.appendChild(renderLane(lane));
   renderLaneDots();
   attachLaneScrollListener();
+
+  root.scrollLeft = lanesScrollLeft;
+  document.querySelectorAll(".lane-cards").forEach(elList => {
+    const laneEl = elList.closest(".lane");
+    const k = laneEl && laneEl.dataset.lane;
+    if (k != null && laneScrollTops[k] != null) {
+      elList.scrollTop = laneScrollTops[k];
+    }
+  });
+  window.scrollTo(0, pageScrollY);
 }
 
 function renderLaneDots() {

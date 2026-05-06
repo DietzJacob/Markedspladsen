@@ -87,6 +87,58 @@ export async function isUserEmpty(uid) {
   return pipeSnap.empty && wonSnap.empty;
 }
 
+export async function findAndDeleteDuplicates(uid) {
+  const [pipeSnap, wonSnap] = await Promise.all([
+    getDocs(pipelineCol(uid)),
+    getDocs(wonCol(uid)),
+  ]);
+
+  const tasks = [];
+
+  const pipeGroups = new Map();
+  pipeSnap.forEach(d => {
+    const data = d.data();
+    const k = `${data.name || ""}|${data.company || ""}|${data.value || 0}`;
+    if (!pipeGroups.has(k)) pipeGroups.set(k, []);
+    pipeGroups.get(k).push({ id: d.id, ...data });
+  });
+
+  for (const cards of pipeGroups.values()) {
+    if (cards.length <= 1) continue;
+    cards.sort((a, b) => {
+      const ta = (a.createdAt && a.createdAt.seconds) || 0;
+      const tb = (b.createdAt && b.createdAt.seconds) || 0;
+      return ta - tb;
+    });
+    for (let i = 1; i < cards.length; i++) {
+      tasks.push(deleteDoc(pipelineDoc(uid, cards[i].id)));
+    }
+  }
+
+  const wonGroups = new Map();
+  wonSnap.forEach(d => {
+    const data = d.data();
+    const k = `${data.name || ""}|${data.company || ""}|${data.value || 0}|${data.wonDate || ""}`;
+    if (!wonGroups.has(k)) wonGroups.set(k, []);
+    wonGroups.get(k).push({ id: d.id, ...data });
+  });
+
+  for (const cards of wonGroups.values()) {
+    if (cards.length <= 1) continue;
+    cards.sort((a, b) => {
+      const ta = (a.createdAt && a.createdAt.seconds) || 0;
+      const tb = (b.createdAt && b.createdAt.seconds) || 0;
+      return ta - tb;
+    });
+    for (let i = 1; i < cards.length; i++) {
+      tasks.push(deleteDoc(wonDoc(uid, cards[i].id)));
+    }
+  }
+
+  await Promise.all(tasks);
+  return tasks.length;
+}
+
 export async function wipeMatchingCards(uid, pipelineMatchers, wonMatchers) {
   const matchKey = (a) => `${a.name || ""}|||${a.company || ""}`;
   const pipeKeys = new Set(pipelineMatchers.map(matchKey));
